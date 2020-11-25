@@ -55,12 +55,12 @@ logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: loggi
 # * `lines`: whatever you push into this empty list, it gets output instead of line.
 # Consider piping two lines 'hey' and 'buddy'. We return three elements, original text, reversed text and its length.
 #
-# $ echo -e "hey\nbuddy" | pythoned '", ".join((line,line[::-1],str(len(line))))' -v
+# $ echo -e "hey\nbuddy" | pyed '", ".join((line,line[::-1],str(len(line))))' -v
 # hey, yeh, 3
 # buddy, yddub, 5
 #
 #  ```bash
-# echo -e "hey\nbuddy" | pythoned 'line,line[::-1],len(line)'
+# echo -e "hey\nbuddy" | pyed 'line,line[::-1],len(line)'
 # hey
 # yeh
 # 3
@@ -71,7 +71,7 @@ logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: loggi
 # ```
 #  These gets resolved to independent lines in the result.
 # ```bash
-# echo -e "hey\nbuddy" | pythoned 'lines.extend([line,line[::-1],len(line)])'
+# echo -e "hey\nbuddy" | pyed 'lines.extend([line,line[::-1],len(line)])'
 # hey
 # yeh
 # 3

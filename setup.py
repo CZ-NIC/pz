@@ -8,16 +8,16 @@ if p.exists():
     long_description = p.read_text()
 
 setup(
-    name='pythoned',
-    version='0.8',
+    name='pyed',
+    version='0.8rc2',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
-    url='https://github.com/CZ-NIC/pythoned',
+    url='https://github.com/CZ-NIC/pyed',
     license='GNU GPLv3',
     description='Launch your tiny Python script on a piped in contents and pipe it out',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    scripts=['pythoned'],
+    scripts=['pyed'],
     classifiers=[
         'Programming Language :: Python :: 3'
     ],

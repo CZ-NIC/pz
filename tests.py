@@ -26,12 +26,12 @@ sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 forgotten_text = "Did not you forget to use --whole?"
 
 
-class TestPythoned(unittest.TestCase):
+class Testpyed(unittest.TestCase):
     col2 = 'line.split("|")[2]'
 
     def go(self, command, piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
            expect=None, debug=False, verbosity=0, setup=None):
-        cmd = ["python3", "-m", "pythoned"]
+        cmd = ["./pyed"]
         if empty:
             cmd.append("--empty")
         if n:
@@ -75,7 +75,7 @@ class TestPythoned(unittest.TestCase):
         ...
 
 
-class TestFlags(TestPythoned):
+class TestFlags(Testpyed):
 
     def test_number_of_lines(self):
         self.assertEqual(3, len(self.go(self.col2, CSV, n=3)))
@@ -94,7 +94,7 @@ class TestFlags(TestPythoned):
         """ Exceptions are shown only if verbosity active. They are correctly printed to STDERR. """
 
         def check(verbosity=0, expect_stderr=b''):
-            p = Popen(["python3", "-m", "pythoned", "invalid line"] + ["-v"] * verbosity,
+            p = Popen(["./pyed", "invalid line"] + ["-v"] * verbosity,
                       stdout=PIPE, stdin=PIPE, stderr=PIPE)
             stdout, stderr = p.communicate(input=b"1")
 
@@ -131,7 +131,7 @@ class TestFlags(TestPythoned):
         self.assertListEqual(['True'] + ['False'] * 9, self.go(self.col2 + ' == "Jamaica"', CSV, empty=True))
 
 
-class TestVariables(TestPythoned):
+class TestVariables(Testpyed):
     def test_lines(self):
         """ Possibility to use `lines` list instead of re-assigning `line`. """
         self.assertListEqual(['5'] * 4, self.go(r"lines.append(5)", LOREM))
@@ -175,7 +175,7 @@ class TestVariables(TestPythoned):
         self.go("line+5", "1", expect=[])
 
 
-class TestCommandPrepending(TestPythoned):
+class TestCommandPrepending(Testpyed):
 
     def go_csv(self, command):
         ret = self.go(command, CSV)
@@ -199,7 +199,7 @@ class TestCommandPrepending(TestPythoned):
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
 
 
-class TestUsecases(TestPythoned):
+class TestUsecases(Testpyed):
     def test_random_number(self):
         self.assertTrue(0 < int(self.go(r'randint(1,10)', CSV)[0]) < 11)
 
