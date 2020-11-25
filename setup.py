@@ -9,7 +9,7 @@ if p.exists():
 
 setup(
     name='pythoned',
-    version='0.8rc2',
+    version='0.8',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pythoned',

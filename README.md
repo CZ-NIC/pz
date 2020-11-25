@@ -4,12 +4,20 @@
 Use Python in Bash. Easily handle day to day CLI operation via Python instead of regular Bash programs.  
 Should you choose Python syntax over `sed`, `awk` or other tools but you do not want to debug Python interprocess communication, read further. `Pythoned` will launch your tiny Python script on a piped in contents and pipes it out. 
 
-Example: append '.com' to every line.
+Example: append '.com' to every line. Simply change the `line` variable.
 ```bash
 $ echo -e "example\nwikipedia" | pythoned 'line += ".com"'
 example.com
 wikipedia.com
 ```
+
+- [Installation](#installation)
+- [Examples](#examples)
+- [Docs](#docs)
+  * [Scope](#scope)
+  * [Auto-import](#auto-import)
+  * [Output](#output)
+  * [CLI flags](#cli-flags)
 
 # Installation
 Install with a single command from [PyPi](https://pypi.org/project/pythoned/).
@@ -19,20 +27,20 @@ pip3 install pythoned
 
 # Examples
 
-## Find out all URLs in a text
-
-We know that all functions from the `re` library are already included, ex: "findall".
-
-```bash
-pythoned "findall(r'(https?://[^\s]+)', line)" < file.log
-```
-
 ## Prepend to every line in a stream
 
 We prepend a line count.
 
 ```bash
 tail -f /var/log/syslog |  pythoned 'f"{len(line)}: {line}"'
+```
+
+## Find out all URLs in a text
+
+We know that all functions from the `re` library are already included, ex: "findall".
+
+```bash
+pythoned "findall(r'(https?://[^\s]+)', line)" < file.log
 ```
 
 ## Keep unique lines
@@ -61,8 +69,8 @@ In the script scope, you have access to the following variables:
     ```bash
     echo 5 | pythoned 'n+2'  # 7 
     ```
-* `text`: whole text (only if `--whole` is set)
-* `skip`: if set to `True`, the line will not be output
+* `text`: whole text, all lines together (only if `--whole` is set)
+* `skip`: if set to `True`, current line will not be output
 
 ## Auto-import
 
@@ -127,8 +135,8 @@ Importing sleep from time
     $ echo -e "hello" | pythoned 'sleep(1)' -vv
     Importing sleep from time
     ```
-* `--filter`: Line is piped out unchanged, however only if evaluated to True.
-    When piping in number to 5, we pass only such bigger than 3.
+* `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
+    When piping in numbers to 5, we pass only such bigger than 3.
     ```bash
     $ echo -e "1\n2\n3\n4\n5" | pythoned "int(line) > 3"  --filter
     4
@@ -147,8 +155,8 @@ Importing sleep from time
     True
     ```
 * `n`: Process only such number of lines. Roughly equivalent to `head -n`.
-* `-1`: Process just the first line. Useful in combination with --whole.
-* `--whole`: Wait till whole text and then process. Variable `text` is available containing whole text. You might want to add `-1` flag.
+* `-1`: Process just the first line. Useful in combination with `--whole`.
+* `--whole`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
     ```bash
     $ echo -e "1\n2\n3" | pythoned 'len(text)' 
     Did not you forget to use --whole?
@@ -167,8 +175,8 @@ Importing sleep from time
     $ echo -e "1\n2\n3" | pythoned 'len(text)' -w1
     6    
     ```
-* `--empty` Output empty lines. (By default skipped.)
-    Consider shortening the text by 3 letters. First line `hey` disappears.
+* `--empty` Output empty lines. (By default skipped.)  
+    Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
     ```bash
     $ echo -e "hey\nbuddy" | pythoned 'line[:-3]'
     bu
