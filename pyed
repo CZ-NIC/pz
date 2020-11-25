@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+#
+import argparse
+import logging
+import re
+import sys
+from collections.abc import Iterable
+# noinspection PyUnresolvedReferences
+from datetime import *
+from itertools import islice
+# noinspection PyUnresolvedReferences
+from math import *
+from re import *
+
+# logging
+logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stderr)
+logger = logging.getLogger(__name__)
+
+# names that can be imported
+available_names = {"Path": "pathlib",
+                   "sleep": "time",
+                   "randint": "random"}
+available_modules = ["pathlib", "time", "jsonpickle", "humanize"]
+
+__doc__ = f"Launch your tiny Python script on a piped in contents and pipe it out" \
+          "\n" \
+          "\nAvailable without import:" \
+          f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...)" \
+          f"\n Auto-imported functions: {', '.join(available_names.keys())}," \
+          f"\n Auto-imported modules: {', '.join(available_modules)}"
+
+# parse arguments
+parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument("command", help='Any Python script (multiple statements allowed)', metavar="COMMAND")
+parser.add_argument("-s", "--setup", help='Any Python script, executed before processing.'
+                                          ' Useful for variable initializing.', metavar="COMMAND")
+parser.add_argument("-v", "--verbose", help='Show command exceptions.'
+                                            ' Used twice to show automatic imports.', action='count', default=0)
+parser.add_argument("-f", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
+                    action='store_true')
+parser.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
+parser.add_argument("-1", help='Process just first line. Useful in combination with --whole.'
+                               ' You may want to add -1 flag.', action='store_true')
+parser.add_argument("-w", "--whole", help='Wait till whole text and then process.'
+                                          ' Variable `text` is available containing whole text.', action='store_true')
+parser.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
+
+args = parser.parse_args()
+if getattr(args, "1"):
+    args.n = 1
+
+logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: logging.DEBUG}[args.verbose])
+
+# XX We should consider if using the lines variable has a meaning
+# * `lines`: whatever you push into this empty list, it gets output instead of line.
+# Consider piping two lines 'hey' and 'buddy'. We return three elements, original text, reversed text and its length.
+#
+# $ echo -e "hey\nbuddy" | pyed '", ".join((line,line[::-1],str(len(line))))' -v
+# hey, yeh, 3
+# buddy, yddub, 5
+#
+#  ```bash
+# echo -e "hey\nbuddy" | pyed 'line,line[::-1],len(line)'
+# hey
+# yeh
+# 3
+# buddy
+# yddub
+# 5
+#
+# ```
+#  These gets resolved to independent lines in the result.
+# ```bash
+# echo -e "hey\nbuddy" | pyed 'lines.extend([line,line[::-1],len(line)])'
+# hey
+# yeh
+# 3
+# buddy
+# yddub
+# 5
+# ```
+
+# user scope variables
+lines = []  # can be output to in a command
+skip = None  # if user sets to False, the line will not be output
+command = args.command.strip()
+whole_hint_printed = False
+if (len(command.splitlines()) == 1
+        and not search("(line|skip)\s?[^=]?=[^=]", command)
+        and ";" not in command
+        and "lines." not in command):
+    # there is only a single line and without assignment
+    # "line = 1" - will not pass
+    # "line += 1" - will not pass
+    # "line + 1" - will pass
+    # "line == 1" - will pass
+    # "lines.append" - will not pass
+    command = ("skip = not " if args.filter else "line = ") + command
+    logger.debug(f"Changing the command to {command}")
+
+# prepare text processing (either fetch whole or line by line)
+if args.whole:
+    # fetch whole text
+    text = sys.stdin.read()  # XX we may stop reading text and use what we have on KeyboardInterrupt
+    loop = (line for line in text.splitlines()[:args.n])
+else:
+    # load lines one by one (while taking at most N lines)
+    loop = islice(sys.stdin, args.n)
+
+# run setup
+if args.setup:
+    exec(args.setup)
+
+while True:
+    try:
+        line = next(loop).rstrip()
+        try:
+            n = int(line)
+        except:
+            n = None
+            pass
+    except (KeyboardInterrupt, StopIteration):
+        break
+    try:
+        while True:
+            # loop until all on the fly imports are done
+            try:
+                exec(command)  # note that exec will not affect local field, hence we cannot easily put this in a method
+            except NameError as e:
+                name = re.match(r"name '(.*?)' is not defined", str(e))[1]
+                if name:
+                    # Import anything on the fly (saved performance when loaded)
+                    if name == "text":
+                        if not whole_hint_printed:
+                            logger.error("Did not you forget to use --whole?")
+                            whole_hint_printed = True
+                        raise
+                    elif name in available_names:
+                        module = available_names[name]
+                        logger.info(f"Importing {name} from {module}")
+                        # ex sleep = getattr(module "time", "sleep")
+                        globals()[name] = getattr(__import__(module), name)
+                    elif name in available_modules:
+                        logger.warning(f"Importing {name}")
+                        globals()[name] = __import__(name)
+                    else:
+                        raise
+                    continue
+            else:
+                if skip:  # user chose` to filter out the line
+                    skip = None
+                    break
+
+                # output one or more lines
+                if lines:
+                    # when lines are set, ignore line
+                    [print(el) for el in lines]
+                    lines.clear()
+                elif line:  # empty string makes no output
+                    if isinstance(line, str):
+                        print(line)
+                    elif isinstance(line, list):  # list is output as multiple lines
+                        [print(el) for el in line]
+                    elif isinstance(line, Iterable):  # tuple or generator (but not a string) gets joined
+                        print(", ".join(str(el) for el in line))
+                    else:  # ex: int
+                        print(line)
+                else:
+                    if args.empty:
+                        print(line)
+                break
+    except Exception as e:
+        logger.warning(f'Exception: {type(e)} {e} on line: {line}')
+        continue
