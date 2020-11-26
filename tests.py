@@ -30,7 +30,7 @@ class Testpyed(unittest.TestCase):
     col2 = 'line.split("|")[2]'
 
     def go(self, command, piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
-           expect=None, debug=False, verbosity=0, setup=None):
+           expect=None, debug=False, verbosity=0, setup=None, final=None, sub=None):
         cmd = ["./pyed"]
         if empty:
             cmd.append("--empty")
@@ -44,6 +44,10 @@ class Testpyed(unittest.TestCase):
             cmd.extend(["-v"] * verbosity)
         if setup:
             cmd.extend(["--setup", setup])
+        if final:
+            cmd.extend(["--finally", final])
+        if sub:
+            cmd.extend(["--sub",sub])
 
         if previous_command:
             cmd = previous_command + " | " + " ".join(cmd) + f" '{command}'"
@@ -128,16 +132,28 @@ class TestFlags(Testpyed):
 
     def test_empty(self):
         """ `line = ` is prepended and empty lines are kept """
-        self.assertListEqual(['True'] + ['False'] * 9, self.go(self.col2 + ' == "Jamaica"', CSV, empty=True))
+        self.go(self.col2 + ' == "Jamaica"', CSV, empty=True, expect=['True'] + ['False'] * 9)
+
+    def test_skip_all(self):
+        """ flag `-0` works however it can be overriden by using `skip` variable """
+        # lines are output normally
+        self.go("line", "1\n2\n2\n3", expect=["1", "2", "2", "3"])
+        # when -0, no lines are shown
+        self.go("line", "1\n2\n2\n3", expect=[], custom_cmd="-0")
+        # however, this behaviour is overriden by using `skip`
+        self.go("skip = line == '2'", "1\n2\n2\n3", expect=["1", "3"], custom_cmd="-0")
+        # `skip` can override just some cases, others remain skipped through `-0` by default
+        self.go("if line == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
 
 class TestVariables(Testpyed):
-    def test_lines(self):
-        """ Possibility to use `lines` list instead of re-assigning `line`. """
-        self.assertListEqual(['5'] * 4, self.go(r"lines.append(5)", LOREM))
-
-        self.assertListEqual(['http://example.com', 'https://example.org', 'http://nic.cz'],
-                             self.go(r"lines.extend(search(r'(https?://[^\s]+)', line).groups())", LOREM))
+    # # deprecated
+    # def test_lines(self):
+    #     """ Possibility to use `lines` list instead of re-assigning `line`. """
+    #     self.assertListEqual(['5'] * 4, self.go(r"lines.append(5)", LOREM))
+    #
+    #     self.assertListEqual(['http://example.com', 'https://example.org', 'http://nic.cz'],
+    #                          self.go(r"lines.extend(search(r'(https?://[^\s]+)', line).groups())", LOREM))
 
     def test_text(self):
         """ Access to the `list` variable depends on the `--whole` flag. """
@@ -174,8 +190,12 @@ class TestVariables(Testpyed):
         self.go("n+5", "1", expect=6)
         self.go("line+5", "1", expect=[])
 
+    def test_set(self):
+        self.go("Set.add(line)", "2\n1\n2\n3\n1", final="sorted(Set)", expect=["1", "2", "3"])
 
-class TestCommandPrepending(Testpyed):
+
+class TestReturnValues(Testpyed):
+    """ Correct command prepending etc. """
 
     def go_csv(self, command):
         ret = self.go(command, CSV)
@@ -197,6 +217,67 @@ class TestCommandPrepending(Testpyed):
     def test_wrong_command(self):
         """ the command is wrong and does nothing since there are both '=' and ';', the line will not change """
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
+
+    def test_callable(self):
+        self.go("line.lower", "ABcD", expect="abcd")
+
+    def test_iterable(self):
+        self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
+
+    def test_tuple(self):
+        self.go("(1,2,3)", "hi", expect="1, 2, 3")
+
+    def test_match_output(self):
+        """ When outputting a regular expression, we use its groups or the matched portion of the string"""
+
+        self.go(r"\s.*", "hello world", custom_cmd="--search", expect=" world")
+        self.go(r'search(r"\s.*", line)', "hello world", expect=" world")
+
+        self.go(r"\s(.*)", "hello world", custom_cmd="--search", expect="world")
+        self.go(r'search(r"\s(.*)", line)', "hello world", expect="world")
+
+        self.go(r"(.*)\s(.*)", "hello world", custom_cmd="--search", expect="hello, world")
+        self.go(r'search(r"(.*)\s(.*)", line)', "hello world", expect="hello, world")
+
+        # outputs the group 1
+        self.go('search(r"""([^1])""", line)', "1a\n2b\n3c", expect=["a", "2", "3"])
+
+        # outputs the group 0
+        self.go('search(r"""[^a]*""", line)', "1a\n2b\n3c", expect=["1", "2b", "3c"])
+
+        # outputs the group 0
+        self.go('match(r"""[^1]*""", line)', "1a\n2b\n3c", expect=["2b", "3c"])
+
+        # take the second char from the string that does not start with a '1'
+        # outputs the group 1
+        self.go('match(r"""[^1](.*)""", line)', "1a\n2b\n3c", expect=["b", "c"])
+
+    def test_triple_quotes(self):
+        """ you can use triple quotes inside a string """
+        self.go(r'match(r"""[^"]*"(.*)".""", line)', """hello "world".""", expect=["world"])
+
+    def test_regular_commands(self):
+        """ You can use ex: --match instead of `line = match(..., line)` """
+        self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--match",
+                expect=["hello, world", "another, words"])
+
+        self.go(r"([^\s]*)", "hello world\nanother words", custom_cmd="--match", expect=["hello", "another"])
+        self.go(r"([^\s]*)", "hello world\nanother words", custom_cmd="--findall",
+                expect=["hello", "world", "another", "words"])
+
+    def test_regular_command_sub(self):
+        self.go(r"[ae]", "hello world\nanother words", sub=r":", expect=["h:llo world", ":noth:r words"])
+
+        # using groups
+        self.go(r"[ae](.)", "hello world\nanother words", sub=r"\1-", expect=["hl-lo world", "n-othr- words"])
+
+    def test_output_tuples_in_list(self):
+        """ If we encounter a list of tuples, we properly joins tuples on independents lines. """
+        # The bad thing would be to print out this (see the parenthesis)
+        # (hello, world)
+        # (another, words)
+        self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--findall",
+                expect=["hello, world", "another, words"])
 
 
 class TestUsecases(Testpyed):

@@ -9,7 +9,7 @@ if p.exists():
 
 setup(
     name='pyed',
-    version='0.8',
+    version='0.9rc1',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pyed',
