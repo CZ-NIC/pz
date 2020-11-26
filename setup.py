@@ -14,7 +14,8 @@ setup(
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pyed',
     license='GNU GPLv3',
-    description='Launch your tiny Python script on a piped in contents and pipe it out',
+    description='Ever wished to use the Python syntax to work in Bash?'
+                ' Then do it and pipe the contents through your tiny Python script with `pyed` utility!',
     long_description=long_description,
     long_description_content_type="text/markdown",
     scripts=['pyed'],

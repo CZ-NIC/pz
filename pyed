@@ -64,7 +64,8 @@ if getattr(args, "1"):
 
 logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: logging.DEBUG}[args.verbose])
 
-# user scope variables
+# variables available in the user scope
+i = 0
 set_ = Set = set()
 list_ = List = list()
 dict_ = Dict = dict()
@@ -96,16 +97,16 @@ def modify_command(name):
         return
 
     if (len(cmd.splitlines()) == 1
-            and not search("(line|skip)\s?[^=]?=[^=]", cmd)
+            and not search("(s|skip)\s?[^=]?=[^=]", cmd)
             and ";" not in cmd
             and "lines." not in cmd):
         # there is only a single line and without assignment
-        # "line = 1" - will not pass
-        # "line += 1" - will not pass
-        # "line + 1" - will pass
-        # "line == 1" - will pass
-        # "lines.append" - will not pass
-        command[name] = ("skip = not " if args.filter else "line = ") + cmd
+        # "s = 1" - will not pass
+        # "s += 1" - will not pass
+        # "s + 1" - will pass
+        # "s == 1" - will pass
+        # "lines.append" - will not pass XX deprecated
+        command[name] = ("skip = not " if args.filter else "s = ") + cmd
         logger.debug(f"Changing the {name} command to {command[name]}")
 
 
@@ -148,9 +149,9 @@ def output(line):
 
 while True:
     try:
-        line = next(loop).rstrip()
+        s = next(loop).rstrip()
         try:
-            n = int(line)
+            n = int(s)
         except:
             n = None
             pass
@@ -165,9 +166,9 @@ while True:
                 # note that exec will not affect local field, hence we cannot easily put this in a method
                 if regular_command:
                     try:
-                        line = regular_command(line)
+                        s = regular_command(s)
                     except re.error as e:
-                        logger.error(f"{e}, regular expression: {command['command']} on line: {line}")
+                        logger.error(f"{e}, regular expression: {command['command']} on line: {s}")
                         break
                 else:
                     exec(command["command"])
@@ -195,14 +196,14 @@ while True:
                 if skip or (skip_all and skip is not False):  # user chooses to filter out the line
                     break
 
-                output(line)
+                output(s)
                 break
     except Exception as e:
-        logger.warning(f'Exception: {type(e)} {e} on line: {line}')
+        logger.warning(f'Exception: {type(e)} {e} on line: {s}')
         continue
 
 # run final script
 if command["finally"]:
-    line = None
+    s = None
     exec(command["finally"])
-    output(line)
+    output(s)

@@ -1,12 +1,11 @@
 # pyed
 [![Build Status](https://travis-ci.org/CZ-NIC/pyed.svg?branch=main)](https://travis-ci.org/CZ-NIC/pyed)
 
-Use Python in Bash. Easily handle day to day CLI operation via Python instead of regular Bash programs.  
-Should you choose Python syntax over `sed`, `awk` or other tools but you do not want to debug Python interprocess communication, read further. `pyed` will launch your tiny Python script on a piped in contents and pipes it out. 
+Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly now what command would you use in Python but you end up querying `man` again and again, read further. Pipe the contents in and let `pyed` to process it through your tiny Python script.
 
-Example: append '.com' to every line. Simply change the `line` variable.
+How? Simply meddle with the `s` variable. Example: appending '.com' to every line.
 ```bash
-$ echo -e "example\nwikipedia" | pyed 'line += ".com"'
+$ echo -e "example\nwikipedia" | pyed 's += ".com"'
 example.com
 wikipedia.com
 ```
@@ -30,12 +29,23 @@ Or download and launch the [`pyed`](https://raw.githubusercontent.com/CZ-NIC/pye
 
 # Examples
 
+How does your data look when `pyed`? Which Bash programs may the utility substitute?
+
+## Extract a substring
+
+Just use the `[:]` notation.
+
+```
+bash
+echo "hello world" | pyed s[6:]  # hello
+```
+
 ## Prepend to every line in a stream
 
 We prepend the length of the line.
 
 ```bash
-tail -f /var/log/syslog |  pyed 'f"{len(line)}: {line}"'
+tail -f /var/log/syslog | pyed 'f"{len(s)}: {s}"'
 ```
 
 ## Converting to uppercase
@@ -43,7 +53,7 @@ tail -f /var/log/syslog |  pyed 'f"{len(line)}: {line}"'
 Replacing `| tr '[:upper:]' '[:lower:]'`.
 
 ```bash
-echo "HELLO" | pyed line.lower  # "hello"
+echo "HELLO" | pyed s.lower  # "hello"
 ```
 
 ## Find out all URLs in a text
@@ -55,22 +65,22 @@ Replacing `sed`. We know that all functions from the `re` library are already in
 pyed --findall "(https?://[^\s]+)" < file.log
 
 # or expand the full command to which is the `--findall` flag equivalent
-pyed "findall(r'(https?://[^\s]+)', line)" < file.log
+pyed "findall(r'(https?://[^\s]+)', s)" < file.log
 ```
 
 ## Parsing numbers
 
-Replacing `cut`. You can chain multiple `pyed` calls.
+Replacing `cut`. Note you can chain multiple `pyed` calls.
 ```bash
-echo "hello,5" | pyed 'line.split(",")[1]' |  pyed n+7  # 12
+echo "hello,5" | pyed 's.split(",")[1]' | pyed n+7  # 12
 ```
 
 ## Keep unique lines
 
-Replacing `| sort | uniq` makes little sense but the demonstration gives you the idea. We initialize a set `s`. When processing a line, `skip` is set to `True` when if already seen.  
+Replacing `| sort | uniq` makes little sense but the demonstration gives you the idea. We initialize a set `c` (like a *collection*). When processing a line, `skip` is set to `True` if already seen.  
 
 ```bash
-$ echo -e "1\n2\n2\n3" | pyed "skip = line in s; s.add(line)"  --setup "s=set()"
+$ echo -e "1\n2\n2\n3" | pyed "skip = s in c; c.add(s)"  --setup "c=set()"
 1
 2
 3
@@ -80,110 +90,112 @@ However, an advantage over `| sort | uniq` comes when handling a stream. You see
 
 Alternatively, to assure the values are sorted, we can make a use of `--finally` flag that produces the output after the processing finished. 
 ```bash
-echo -e "1\n2\n2\n3" | pyed "Set.add(line)" --finally "sorted(Set)"  -0
+echo -e "1\n2\n2\n3" | pyed "Set.add(s)" --finally "sorted(Set)"  -0
 ```
 Note that we used the variable `Set` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
 
-<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you see that the command changes to `line = Set.add(line)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub> 
+<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = Set.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub> 
 
 ## Handling nested quotes
 To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used apostrophe in the text, we had have to slash it. Instead, triple quotes serve us well.
 ```bash
-echo -e 'hello "world".' | pyed 'match(r"""[^"]*"(.*)".""", line)' # world
+echo -e 'hello "world".' | pyed 'match(r"""[^"]*"(.*)".""", s)' # world
 ```
 
-In that case, even better is to use `--match` flag to get rid of the quoting as much as possible.
+In that case, even better is to use the `--match` flag to get rid of the quoting as much as possible.
 ```bash
 echo -e 'hello "world".' | pyed --match '[^"]*"(.*)"'  # world
 ``` 
 
 # Docs
 
-## Scope
+## Scope variables
 
 In the script scope, you have access to the following variables:
-* `line`: current line, you can change it
+* `s`: Current line, change it according to your needs
     ```bash
-    echo 5 | pyed 'line += "4"'  # 54 
+    echo 5 | pyed 's += "4"'  # 54 
     ```
-* `n`: current line converted to an `int` if possible
+* `n`: Current line converted to an `int` if possible
     ```bash
     echo 5 | pyed 'n+2'  # 7 
     ```
-* `text`: whole text, all lines together (only if `--whole` is set)
-* `skip`: if set to `True`, current line will not be output
-* Some variables are initialized empty and ready to be used globally. They are common for all lines.
+* `text`: Whole text, all lines together (available only if the `--whole` flag is set)
+* `skip`: If set to `True`, current line will not be output. If set to `False` when using the `-0` flag, the line will be output regardless. 
+* Other variables are initialized and ready to be used globally. They are common for all the lines.
+    * `i = 0`
     * `set_ = Set = set()`
     * `list_ = List = list()`
     * `dict_ = Dict = dict()`
     ```bash
-    echo -e "2\n1\n2\n3\n1" | pyed "Set.add(line)" --end "sorted(Set)"
+    echo -e "2\n1\n2\n3\n1" | pyed "Set.add(s)" --end "sorted(Set)"
     1
     2
     3  
     ``` 
   
-    It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the most important, every character counts. It is then up to you to use either `set_` or `Set`.
+    It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts. It is then up to you to decide using either `set_` or `Set`.
 
 ## Auto-import
 
-* You can always import libraries you need manually.
+* You can always import libraries you need manually. (Put `import` statement into the command.)
 * Some libraries are ready to be used: `re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...), defaultdict`
-* Some others can auto-imported whenever its use has been detected. In such case, the line is reprocessed.
+* Some others are auto-imported whenever its use has been detected. In such case, the line is reprocessed.
     * Functions: `(pathlib).Path, (time).sleep, (random).randint, (requests).get`
     * Modules: `pathlib, time, jsonpickle, requests, humanize`
 
-Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence you other in-script variables. Use verbose output to see if something has been auto-imported. 
+Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash
-echo -e "hey\nbuddy" | pyed 'a+=1; sleep(1); b+=1; line = a,b ' --setup "a=0;b=0;" -vv
+echo -e "hey\nbuddy" | pyed 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -vv
 Importing sleep from time
 2, 1
 3, 2
 ```
+As seen, `a` was incremented 3× times and `b` on twice because we had to process the first line twice in order to auto-import sleep. In the first run, the processing raised an exception because `sleep` was not known. To prevent that, explicitly appending `from time import sleep` to the `--setup` flag would do. 
 
 
 
 ## Output
-* Explicit assignment: By default, we output the `line`.
+* Explicit assignment: By default, we output the `s`.
     ```bash
-    echo "5" | pyed 'line = len(line)' # 1
+    echo "5" | pyed 's = len(s)' # 1
     ```
-* Single expression: If not set explicitly, we assign the expression to it automatically.
+* Single expression: If not set explicitly, we assign the expression to `s` automatically.
     ```bash
-    echo "5" | pyed 'len(line)'  # 1 
+    echo "5" | pyed 'len(s)'  # 1 (command internally changed to `s = len(s)`)
     ```
-* Tuple, generator: If `line` ends up as a tuple, its get joined by spaces.
+* Tuple, generator: If `s` ends up as a tuple, its get joined by spaces.
     ```bash
-    $ echo "5" | pyed 'line, len(line)'
+    $ echo "5" | pyed 's, len(s)'
     5, 1 
     ```
   
     Consider piping two lines 'hey' and 'buddy'. We return three elements, original text, reversed text and its length.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 'line,line[::-1],len(line)' 
+    $ echo -e "hey\nbuddy" | pyed 's,s[::-1],len(s)' 
     hey, yeh, 3
     buddy, yddub, 5
     ```
-* List: When `line` ends up as a list, its elements are printed to independent lines.
+* List: When `s` ends up as a list, its elements are printed to independent lines.
     ```bash
-    $ echo "5" | pyed '[line, len(line)]'
+    $ echo "5" | pyed '[s, len(s)]'
     5
     1 
     ```
 * Regular match: All groups are treated as a tuple. If no group used, we print the entire matched string.
     ```bash
     # no group → print entire matched string
-    echo "hello world" | pyed 'search(r"\s.*", line)' # " world"
+    echo "hello world" | pyed 'search(r"\s.*", s)' # " world"
   
     # single matched group
-    echo "hello world" | pyed 'search(r"\s(.*)", line)' # "world"
+    echo "hello world" | pyed 'search(r"\s(.*)", s)' # "world"
   
     # matched groups treated as tuple
-    echo "hello world" | pyed 'search(r"(.*)\s(.*)", line)'  # "hello, world"
+    echo "hello world" | pyed 'search(r"(.*)\s(.*)", s)'  # "hello, world"
     ```
-* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `line.lower()` would have had to be quoted.)
+* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.)
     ```bash
-    echo "HEllO" | pyed line.lower  # "hello"    
+    echo "HEllO" | pyed s.lower  # "hello"    
     ```
 
 ## CLI flags
@@ -191,12 +203,13 @@ Importing sleep from time
 * `--setup`: Any Python script, executed before processing. Useful for variable initializing.
     Ex: prepend line numbers by incrementing a variable `count`.
     ```bash
-    $ echo -e "row\nanother row" | pyed 'count+=1;line = f"{count}: {line}"'  --setup 'count=0'
+    $ echo -e "row\nanother row" | pyed 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
     1: row
     2: another row
     ```
+    <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
 * `--finally`: Any Python script, executed after processing. Useful for final output.
-* `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (prepending `line =` if omitted).  
+* `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (prepending `s =` if omitted).  
     ```bash
     $ echo -e "hello" | pyed 'invalid command' # empty result
     $ echo -e "hello" | pyed 'invalid command' -v
@@ -207,19 +220,19 @@ Importing sleep from time
 * `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "int(line) > 3"  --filter
+    $ echo -e "1\n2\n3\n4\n5" | pyed "n > 3"  --filter
     4
     5
     ```
     The statement is equivalent to using `skip` (and not using `--filter`).
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "skip = not int(line) > 3"
+    $ echo -e "1\n2\n3\n4\n5" | pyed "skip = not n > 3"
     4
     5
     ```
-    When not using filter, `line` evaluates to `True` / `False`. By default, `False` or empty values are not output. 
+    When not using filter, `s` evaluates to `True` / `False`. By default, `False` or empty values are not output. 
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "int(line) > 3"   
+    $ echo -e "1\n2\n3\n4\n5" | pyed "n > 3"   
     True
     True
     ```
@@ -247,27 +260,27 @@ Importing sleep from time
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 'line[:-3]'
+    $ echo -e "hey\nbuddy" | pyed 's[:-3]'
     bu
     ```
     Should we insist on displaying, we see an empty line now.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 'line[:-3]' --empty
+    $ echo -e "hey\nbuddy" | pyed 's[:-3]' --empty
     
     bu
     ```
-* `-0`: Skip all lines output. (Useful in combination with --finally.)
+* `-0`: Skip all lines output. (Useful in combination with `--finally`.)
 
 ### Regular flags
-* `--search`: Equivalent to `search(COMMAND, line)`
+* `--search`: Equivalent to `search(COMMAND, s)`
     ```bash
     $ echo -e "hello world\nanother words" | pyed --search ".*\s"
     hello
     another
     ```
-* `--match`: Equivalent to `match(COMMAND, line)`
-* `--findall`: Equivalent to `findall(COMMAND, line)`
-* `--sub SUBSTITUTION`: Equivalent to `sub(COMMAND, SUBSTITUTION, line)`
+* `--match`: Equivalent to `match(COMMAND, s)`
+* `--findall`: Equivalent to `findall(COMMAND, s)`
+* `--sub SUBSTITUTION`: Equivalent to `sub(COMMAND, SUBSTITUTION, s)`
     ```bash
     $ echo -e "hello world\nanother words" | pyed --sub ":" ".*\s"
     :world

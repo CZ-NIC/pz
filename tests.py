@@ -27,7 +27,7 @@ forgotten_text = "Did not you forget to use --whole?"
 
 
 class Testpyed(unittest.TestCase):
-    col2 = 'line.split("|")[2]'
+    col2 = 's.split("|")[2]'
 
     def go(self, command, piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
            expect=None, debug=False, verbosity=0, setup=None, final=None, sub=None):
@@ -86,7 +86,7 @@ class TestFlags(Testpyed):
 
     def test_import(self):
         # timedelta should be already present due to `from datetime import *`
-        self.go(r'line+=str(timedelta(seconds=5))', previous_command="echo '123'", custom_cmd="-vv",
+        self.go(r's+=str(timedelta(seconds=5))', previous_command="echo '123'", custom_cmd="-vv",
                 expect="1230:00:05")
 
         # when verbosity increased, we should get notified when an import happened
@@ -123,7 +123,7 @@ class TestFlags(Testpyed):
 
     def test_filter(self):
         expect = [line for line in LOREM.splitlines() if len(line) > 20]
-        r = self.go(r"len(line) > 20", LOREM, custom_cmd="--filter", expect=expect)
+        r = self.go(r"len(s) > 20", LOREM, custom_cmd="--filter", expect=expect)
         self.assertEqual(3, len(r))
 
     def test_setup(self):
@@ -131,19 +131,19 @@ class TestFlags(Testpyed):
         self.assertEqual(0, len(self.go("if custom: skip=True;", LOREM, setup='custom = 1;')))
 
     def test_empty(self):
-        """ `line = ` is prepended and empty lines are kept """
+        """ `s = ` is prepended and empty lines are kept """
         self.go(self.col2 + ' == "Jamaica"', CSV, empty=True, expect=['True'] + ['False'] * 9)
 
     def test_skip_all(self):
         """ flag `-0` works however it can be overriden by using `skip` variable """
         # lines are output normally
-        self.go("line", "1\n2\n2\n3", expect=["1", "2", "2", "3"])
+        self.go("s", "1\n2\n2\n3", expect=["1", "2", "2", "3"])
         # when -0, no lines are shown
-        self.go("line", "1\n2\n2\n3", expect=[], custom_cmd="-0")
+        self.go("s", "1\n2\n2\n3", expect=[], custom_cmd="-0")
         # however, this behaviour is overriden by using `skip`
-        self.go("skip = line == '2'", "1\n2\n2\n3", expect=["1", "3"], custom_cmd="-0")
+        self.go("skip = s == '2'", "1\n2\n2\n3", expect=["1", "3"], custom_cmd="-0")
         # `skip` can override just some cases, others remain skipped through `-0` by default
-        self.go("if line == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
+        self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
 
 class TestVariables(Testpyed):
@@ -168,7 +168,7 @@ class TestVariables(Testpyed):
 
     def test_skip(self):
         """ Variable can be skipped """
-        self.go("skip = line in s; s.add(line);", "1\n2\n2\n3", setup="s=set();", expect=["1", "2", "3"])
+        self.go("skip = s in c; c.add(s);", "1\n2\n2\n3", setup="c=set();", expect=["1", "2", "3"])
 
     def test_using_regex(self):
         """ Re methods are imported. We try to extract all URLs in a text. """
@@ -176,22 +176,22 @@ class TestVariables(Testpyed):
         # Find all URLs
         self.assertListEqual(['http://example.com', 'http://csirt.cz', 'https://example.org',
                               'http://nic.cz', 'http://example.com'],
-                             self.go(r"findall(r'(https?://[^\s]+)', line)", LOREM))
+                             self.go(r"findall(r'(https?://[^\s]+)', s)", LOREM))
 
         # search first URL on a line
         self.assertListEqual(['http://example.com', 'https://example.org', 'http://nic.cz'],
-                             self.go(r"search(r'(https?://[^\s]+)', line)[0]", LOREM))
+                             self.go(r"search(r'(https?://[^\s]+)', s)[0]", LOREM))
 
         # Pass line if it begins with an URL
         self.assertListEqual(['https://example.org'],
-                             self.go(r"match(r'(https?://[^\s]+)', line)[0]", LOREM))
+                             self.go(r"match(r'(https?://[^\s]+)', s)[0]", LOREM))
 
     def test_number(self):
         self.go("n+5", "1", expect=6)
-        self.go("line+5", "1", expect=[])
+        self.go("s+5", "1", expect=[])
 
     def test_set(self):
-        self.go("Set.add(line)", "2\n1\n2\n3\n1", final="sorted(Set)", expect=["1", "2", "3"])
+        self.go("Set.add(s)", "2\n1\n2\n3\n1", final="sorted(Set)", expect=["1", "2", "3"])
 
 
 class TestReturnValues(Testpyed):
@@ -203,15 +203,15 @@ class TestReturnValues(Testpyed):
         return ret
 
     def test_single_line_without_assignement(self):
-        """ `line = ` is prepended when not present"""
+        """ `s = ` is prepended when not present"""
         self.assertEqual("Jamaica", self.go_csv(self.col2)[0])
 
     def test_single_line_with_assignement(self):
-        """ `line = ` is not prepended, assignement is already present """
-        self.assertEqual("Jamaica", self.go_csv('line = ' + self.col2)[0])
+        """ `s = ` is not prepended, assignement is already present """
+        self.assertEqual("Jamaica", self.go_csv('s = ' + self.col2)[0])
 
     def test_comparing(self):
-        """ `line = ` is prepended, we do not get confused if '==' has already been present """
+        """ `s = ` is prepended, we do not get confused if '==' has already been present """
         self.assertEqual(['True'], self.go(self.col2 + ' == "Jamaica"', CSV))
 
     def test_wrong_command(self):
@@ -219,7 +219,7 @@ class TestReturnValues(Testpyed):
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
 
     def test_callable(self):
-        self.go("line.lower", "ABcD", expect="abcd")
+        self.go("s.lower", "ABcD", expect="abcd")
 
     def test_iterable(self):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
@@ -231,33 +231,33 @@ class TestReturnValues(Testpyed):
         """ When outputting a regular expression, we use its groups or the matched portion of the string"""
 
         self.go(r"\s.*", "hello world", custom_cmd="--search", expect=" world")
-        self.go(r'search(r"\s.*", line)', "hello world", expect=" world")
+        self.go(r'search(r"\s.*", s)', "hello world", expect=" world")
 
         self.go(r"\s(.*)", "hello world", custom_cmd="--search", expect="world")
-        self.go(r'search(r"\s(.*)", line)', "hello world", expect="world")
+        self.go(r'search(r"\s(.*)", s)', "hello world", expect="world")
 
         self.go(r"(.*)\s(.*)", "hello world", custom_cmd="--search", expect="hello, world")
-        self.go(r'search(r"(.*)\s(.*)", line)', "hello world", expect="hello, world")
+        self.go(r'search(r"(.*)\s(.*)", s)', "hello world", expect="hello, world")
 
         # outputs the group 1
-        self.go('search(r"""([^1])""", line)', "1a\n2b\n3c", expect=["a", "2", "3"])
+        self.go('search(r"""([^1])""", s)', "1a\n2b\n3c", expect=["a", "2", "3"])
 
         # outputs the group 0
-        self.go('search(r"""[^a]*""", line)', "1a\n2b\n3c", expect=["1", "2b", "3c"])
+        self.go('search(r"""[^a]*""", s)', "1a\n2b\n3c", expect=["1", "2b", "3c"])
 
         # outputs the group 0
-        self.go('match(r"""[^1]*""", line)', "1a\n2b\n3c", expect=["2b", "3c"])
+        self.go('match(r"""[^1]*""", s)', "1a\n2b\n3c", expect=["2b", "3c"])
 
         # take the second char from the string that does not start with a '1'
         # outputs the group 1
-        self.go('match(r"""[^1](.*)""", line)', "1a\n2b\n3c", expect=["b", "c"])
+        self.go('match(r"""[^1](.*)""", s)', "1a\n2b\n3c", expect=["b", "c"])
 
     def test_triple_quotes(self):
         """ you can use triple quotes inside a string """
-        self.go(r'match(r"""[^"]*"(.*)".""", line)', """hello "world".""", expect=["world"])
+        self.go(r'match(r"""[^"]*"(.*)".""", s)', """hello "world".""", expect=["world"])
 
     def test_regular_commands(self):
-        """ You can use ex: --match instead of `line = match(..., line)` """
+        """ You can use ex: --match instead of `s = match(..., s)` """
         self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--match",
                 expect=["hello, world", "another, words"])
 
