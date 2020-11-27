@@ -13,7 +13,7 @@ wikipedia.com
 - [Installation](#installation)
 - [Examples](#examples)
 - [Docs](#docs)
-  * [Scope](#scope)
+  * [Scope variables](#scope-variables)
   * [Auto-import](#auto-import)
   * [Output](#output)
   * [CLI flags](#cli-flags)
@@ -57,7 +57,7 @@ echo "HELLO" | pyed s.lower  # "hello"
 ```
 ## Parsing numbers
 
-Replacing `cut`. Note you can chain multiple `pyed` calls.
+Replacing `cut`. Note you can chain multiple `pyed` calls. Split by comma '`,`', then use `n` to access the line converted to a number. 
 ```bash
 echo "hello,5" | pyed 's.split(",")[1]' | pyed n+7  # 12
 ```
@@ -77,6 +77,13 @@ pyed "findall(r'(https?://[^\s]+)', s)" < file.log
 If chained, you can open all the URLs in the current web browser. Note that the function `webbrowser.open` gets auto-imported from the standard library.
 ```bash
 pyed --findall "(https?://[^\s]+)" < file.log | pyed webbrowser.open
+```
+
+## Sum numbers
+Replacing `| awk '{count+=$1} END{print count}'` or `| paste -sd+ | bc`. Just use `sum` in the `--finally` clause.
+
+```bash
+echo -e "1\n2\n3\n4" | pyed --finally sum  # 10
 ```
 
 ## Keep unique lines
@@ -101,7 +108,7 @@ Note that we used the variable `Set` which is initialized by default to an empty
 <sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = Set.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub> 
 
 ## Handling nested quotes
-To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used apostrophe in the text, we had have to slash it. Instead, triple quotes serve us well.
+To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used an apostrophe in the text, we had have to slash it. Instead, triple quotes might improve readability.
 ```bash
 echo -e 'hello "world".' | pyed 'match(r"""[^"]*"(.*)".""", s)' # world
 ```
@@ -120,11 +127,31 @@ In the script scope, you have access to the following variables:
     ```bash
     echo 5 | pyed 's += "4"'  # 54 
     ```
-* `n`: Current line converted to an `int` if possible
+* `n`: Current line converted to an `int` (or `float`) if possible
     ```bash
-    echo 5 | pyed 'n+2'  # 7 
+    echo 5 | pyed n+2  # 7
+    echo 5.2 | pyed n+2  # 7.2
     ```
-* `text`: Whole text, all lines together (available only if the `--whole` flag is set)
+* `text`: Whole text, all lines together (available only with the `--whole` flag set)  
+    Ex: get character count (an alternative to `| wc -c`).
+    ```
+    echo -e "hello\nworld" | pyed --finally 'len(text)' --whole  # 12
+    ```
+* `lines`: List of lines so far processed (available only with the `--lines` flag set)  
+    Ex: returning the last line
+    ```bash
+    # the `--lines` flag is automatically on when `--finally` used
+    echo -e "hello\nworld" | pyed --finally lines[-1]  # "world"
+    ```
+* `numbers`: List of numbers so far processed (available only with the `--lines` flag set)  
+    Ex: show current average of the stream. More specifically, we print out tuples: `line count, current line, average`.
+    ```bash
+    $ echo -e "20\n40\n25\n28" | pyed 'i+=1; s = i, s, sum(numbers)/i' --lines
+    1, 20, 20.0
+    2, 40, 30.0
+    3, 25, 28.333333333333332
+    4, 28, 28.25
+    ```
 * `skip`: If set to `True`, current line will not be output. If set to `False` when using the `-0` flag, the line will be output regardless. 
 * Other variables are initialized and ready to be used globally. They are common for all the lines.
     * `i = 0`
@@ -197,26 +224,42 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     # matched groups treated as tuple
     echo "hello world" | pyed 'search(r"(.*)\s(.*)", s)'  # "hello, world"
     ```
-* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.)
+* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.) Use 3 verbose flags `-vvv` to inspect the internal change of the command.
     ```bash
     # internally changed to `s = s.lower()`
     echo "HEllO" | pyed s.lower  # "hello"
       
     # internally changed to `s = len(s)`
-    echo "HEllO" | pyed len  # "hello"
+    echo "HEllO" | pyed len  # "5"
   
     # internally changed to `s = base64.b64encode(s.encode('utf-8'))`
-    echo "HEllO" | pyed b64encode  # "hello"
+    echo "HEllO" | pyed b64encode  # "SEVsbE8="
   
     # internally changed to `s = math.sqrt(n)`
     # and then to `s = round(n)`
-    echo "25" | pyed sqrt | pyed round # "5"
+    echo "25" | pyed sqrt | pyed round  # "5"
+  
+    # internally changed to `s = sum(numbers)`
+    # `numbers` are available only when `--lines` or `--finally` set
+    echo -e "1\n2\n3\n4" | pyed sum --lines
+    1
+    3
+    6
+    10
+  
+    # internally changed to `' - '.join(lines)`
+    # `lines` are available only when `--lines` or `--finally` set  
+    echo -e "1\n2\n3\n4" | pyed  --finally "' - '.join"
+    1 - 2 - 3 - 4
     ```
   
-  As you see in the examples, if `TypeError` raised, we try to reprocess the row while adding current line as the argument: either its basic form `s` or using its numeral representation `n` if available or encoded to bytes `s.encode('utf-8')`.  
-  
-  In `--finally` clause, the `text` is given.  
-  XXX EXAMPLE
+  As you see in the examples, if `TypeError` raised, we try to reprocess the row while adding current line as the argument: 
+    * either its basic form `s`
+    * the `numbers` if available
+    * using its numeral representation `n` if available
+    * encoded to bytes `s.encode('utf-8')`
+    
+  In the `--finally` clause, we try furthermore the `lines`.  
 
 ## CLI flags
 * `command`: Any Python script (multiple statements allowed)
@@ -229,7 +272,24 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```
     <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
 * `--finally`: Any Python script, executed after processing. Useful for final output.
-* `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (prepending `s =` if omitted).  
+    Turns on the `--lines` automatically because we do not expect an infinite stream.
+    ```bash
+    $ echo -e "1\n2\n3\n4" | pyed --finally sum
+    10
+    $ echo -e "1\n2\n3\n4" | pyed s --finally sum
+    1
+    2
+    3
+    4
+    10  
+    $ echo -e "1\n2\n3\n4" | pyed sum --finally sum
+    1
+    3
+    6
+    10
+    10
+    ```
+* `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (attempts to make it callable and prepending `s =` if omitted).  
     ```bash
     $ echo -e "hello" | pyed 'invalid command' # empty result
     $ echo -e "hello" | pyed 'invalid command' -v
@@ -276,6 +336,14 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```bash
     $ echo -e "1\n2\n3" | pyed 'len(text)' -w1
     6    
+    ```
+* `--lines`: Populate `lines` and `numbers` with lines. This is off by default since this would cause an overflow when handling an infinite input.
+    ```bash
+    $ echo -e "1\n2\n3\n4" | pyed sum  --lines  # (internally changed to `s = sum(numbers)`
+    1
+    3
+    6
+    10      
     ```
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.

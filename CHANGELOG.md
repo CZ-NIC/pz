@@ -8,6 +8,7 @@
 - `--finally` flag in opposition to `--setup`
 - allowing callables to be output
 - raw output
+- `--lines` flag, variables `lines` and `numbers`
 
 ## 0.8 (2020-11-25)
 - fully working

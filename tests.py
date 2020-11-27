@@ -23,13 +23,13 @@ adipiscing elit http://nic.cz http://example.com
 sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 """
 
-forgotten_text = "Did not you forget to use --whole?"
+forgotten_text = "Did not you forget to use --whole to access `text`?"
 
 
 class Testpyed(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
-    def go(self, command, piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
+    def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
            expect=None, debug=False, verbosity=0, setup=None, final=None, sub=None):
         cmd = ["./pyed"]
         if empty:
@@ -219,12 +219,27 @@ class TestReturnValues(Testpyed):
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
 
     def test_callable(self):
+        num = "1\n2\n3\n4"
         # modified to `s.lower(original_line)`
         self.go("s.lower", "ABcD", expect="abcd")
         # modified int `n` to `sqrt(n)`
         self.go("sqrt", "25", expect=5.0)
         # modified float `n` to `sqrt(n)`
         self.go("round", "5.0", expect=5)
+
+        # since --lines is off, we sum the bytes
+        # This is counter-intuitive but I do not want to allow --lines by default
+        # since it overflows while processing an infinite input stream.
+        # XX self.go("sum", num, expect=["49", "50", "51", "52"])
+        self.go("sum", num, expect=[])  # missing --lines
+
+        self.go("sum", num, expect=["1", "3", "6", "10"], custom_cmd="--lines")
+
+        self.go("", num, final="sum", expect="10")
+        self.go("sum", num, final="sum", expect=["1", "3", "6", "10", "10"])
+        self.go("n", num, final="sum", expect=["1", "2", "3", "4", "10"])
+        self.go("1", num, final="sum", expect=["1", "1", "1", "1", "10"])
+        self.go("", num, final="' - '.join", expect=["1 - 2 - 3 - 4"])
 
     def test_iterable(self):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
@@ -292,6 +307,8 @@ class TestReturnValues(Testpyed):
         self.go("b64encode(s.encode('utf-8'))", s, expect=["aGVsbG8gd29ybGQ=", "YW5vdGhlciB3b3Jkcw=="])
         self.go("b64encode", s, expect=["aGVsbG8gd29ybGQ=", "YW5vdGhlciB3b3Jkcw=="])
         self.go("b64encode", '\x66\x6f\x6f', expect="Zm9v")
+        self.go("b64encode", "HEllO", expect="SEVsbE8=")
+        self.go("b64encode(bytes(s, 'utf-8'))", "HEllO", expect="SEVsbE8=")
 
 
 class TestUsecases(Testpyed):
