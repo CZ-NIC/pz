@@ -55,6 +55,12 @@ Replacing `| tr '[:upper:]' '[:lower:]'`.
 ```bash
 echo "HELLO" | pyed s.lower  # "hello"
 ```
+## Parsing numbers
+
+Replacing `cut`. Note you can chain multiple `pyed` calls.
+```bash
+echo "hello,5" | pyed 's.split(",")[1]' | pyed n+7  # 12
+```
 
 ## Find out all URLs in a text
 
@@ -68,11 +74,9 @@ pyed --findall "(https?://[^\s]+)" < file.log
 pyed "findall(r'(https?://[^\s]+)', s)" < file.log
 ```
 
-## Parsing numbers
-
-Replacing `cut`. Note you can chain multiple `pyed` calls.
+If chained, you can open all the URLs in the current web browser. Note that the function `webbrowser.open` gets auto-imported from the standard library.
 ```bash
-echo "hello,5" | pyed 's.split(",")[1]' | pyed n+7  # 12
+pyed --findall "(https?://[^\s]+)" < file.log | pyed webbrowser.open
 ```
 
 ## Keep unique lines
@@ -195,8 +199,24 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```
 * Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.)
     ```bash
-    echo "HEllO" | pyed s.lower  # "hello"    
+    # internally changed to `s = s.lower()`
+    echo "HEllO" | pyed s.lower  # "hello"
+      
+    # internally changed to `s = len(s)`
+    echo "HEllO" | pyed len  # "hello"
+  
+    # internally changed to `s = base64.b64encode(s.encode('utf-8'))`
+    echo "HEllO" | pyed b64encode  # "hello"
+  
+    # internally changed to `s = math.sqrt(n)`
+    # and then to `s = round(n)`
+    echo "25" | pyed sqrt | pyed round # "5"
     ```
+  
+  As you see in the examples, if `TypeError` raised, we try to reprocess the row while adding current line as the argument: either its basic form `s` or using its numeral representation `n` if available or encoded to bytes `s.encode('utf-8')`.  
+  
+  In `--finally` clause, the `text` is given.  
+  XXX EXAMPLE
 
 ## CLI flags
 * `command`: Any Python script (multiple statements allowed)

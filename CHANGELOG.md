@@ -7,6 +7,7 @@
 - regular flags
 - `--finally` flag in opposition to `--setup`
 - allowing callables to be output
+- raw output
 
 ## 0.8 (2020-11-25)
 - fully working

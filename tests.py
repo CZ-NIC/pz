@@ -47,7 +47,7 @@ class Testpyed(unittest.TestCase):
         if final:
             cmd.extend(["--finally", final])
         if sub:
-            cmd.extend(["--sub",sub])
+            cmd.extend(["--sub", sub])
 
         if previous_command:
             cmd = previous_command + " | " + " ".join(cmd) + f" '{command}'"
@@ -219,7 +219,12 @@ class TestReturnValues(Testpyed):
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
 
     def test_callable(self):
+        # modified to `s.lower(original_line)`
         self.go("s.lower", "ABcD", expect="abcd")
+        # modified int `n` to `sqrt(n)`
+        self.go("sqrt", "25", expect=5.0)
+        # modified float `n` to `sqrt(n)`
+        self.go("round", "5.0", expect=5)
 
     def test_iterable(self):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
@@ -278,6 +283,15 @@ class TestReturnValues(Testpyed):
         # (another, words)
         self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--findall",
                 expect=["hello, world", "another, words"])
+
+    def test_bytes(self):
+        """ Raw output possible (not in the Python format b'string')
+        When enriching a callable with a byte-encoded parameter "b64encode" += "(s.encode('utf-8')" instead of "(s)"
+        """
+        s = "hello world\nanother words"
+        self.go("b64encode(s.encode('utf-8'))", s, expect=["aGVsbG8gd29ybGQ=", "YW5vdGhlciB3b3Jkcw=="])
+        self.go("b64encode", s, expect=["aGVsbG8gd29ybGQ=", "YW5vdGhlciB3b3Jkcw=="])
+        self.go("b64encode", '\x66\x6f\x6f', expect="Zm9v")
 
 
 class TestUsecases(Testpyed):

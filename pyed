@@ -22,15 +22,17 @@ logger = logging.getLogger(__name__)
 available_names = {"Path": "pathlib",
                    "sleep": "time",
                    "randint": "random",
-                   "get": "requests"}
-available_modules = ["pathlib", "time", "jsonpickle", "humanize", "requests"]
+                   "get": "requests",
+                   "b64encode": "base64",
+                   "b64decode": "base64"}
+available_modules = set(list(available_names.values()) + ["jsonpickle", "humanize", "webbrowser"])
 
 __doc__ = f"Launch your tiny Python script on a piped in contents and pipe it out" \
           "\n" \
           "\nAvailable without import:" \
           f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...)," \
           f" defaultdict" \
-          f"\n Auto-imported functions: {', '.join(available_names.keys())}," \
+          f"\n Auto-imported functions: {', '.join(available_names.keys())}" \
           f"\n Auto-imported modules: {', '.join(available_modules)}"
 
 # parse arguments
@@ -39,7 +41,7 @@ parser.add_argument("command", help='Any Python script (multiple statements allo
 parser.add_argument("-s", "--setup", help='Any Python script, executed before processing.'
                                           ' Useful for variable initializing.', metavar="COMMAND")
 parser.add_argument("--finally", help='Any Python script, executed after processing.'
-                                      ' Useful for final output.', metavar="COMMAND")
+                                      ' Useful for final output.', metavar="COMMAND", nargs="?", default=False)
 parser.add_argument("-v", "--verbose", help='Show command exceptions.'
                                             ' Used twice to show automatic imports.', action='count', default=0)
 parser.add_argument("-f", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
@@ -58,11 +60,27 @@ regular.add_argument("--match", help='Equivalent to `match(COMMAND, line)`', act
 regular.add_argument("--findall", help='Equivalent to `findall(COMMAND, line)`', action='store_true')
 regular.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, line)`', metavar="SUBSTITUTION")
 
+# evaluate command line arguments
 args = parser.parse_args()
 if getattr(args, "1"):
     args.n = 1
 
+# If not present, --finally flag is False; if empty, it is None
+if getattr(args, "finally") is None:
+    setattr(args, "finally", args.command)
+    args.command = None
+
 logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: logging.DEBUG}[args.verbose])
+
+
+# custom functions
+def write(s):
+    """ Print either bytes or string. Bytes are not printed in the Python b-form: b'string' but raw. """
+    if type(s) is bytes:
+        sys.stdout.buffer.write(s + b'\n')
+    else:
+        print(s)
+
 
 # variables available in the user scope
 i = 0
@@ -70,10 +88,10 @@ set_ = Set = set()
 list_ = List = list()
 dict_ = Dict = dict()
 skip = None  # if user sets to False, the line will not be output
-skip_all = getattr(args, "0")  # XXX add a test
+skip_all = getattr(args, "0")
 whole_hint_printed = False
 
-# enrich commands (prepend `line =` if needed)
+# prepare commands (prepend `line =` if needed)
 command = {}
 regular_command = None  # prepare regular modifications
 reg_ex = None
@@ -89,7 +107,7 @@ if args.match or args.findall or args.search or args.sub:
         regular_command = lambda line: reg_ex.sub(args.sub, line)
 
 
-def modify_command(name):
+def prepare_command(name):
     command[name] = cmd = (getattr(args, name) or "").strip()
 
     if name == "command" and regular_command:
@@ -110,7 +128,7 @@ def modify_command(name):
         logger.debug(f"Changing the {name} command to {command[name]}")
 
 
-[modify_command(name) for name in ("command", "finally")]
+[prepare_command(name) for name in ("command", "finally")]
 
 # prepare text processing (either fetch whole or line by line)
 if args.whole:
@@ -125,6 +143,10 @@ else:
 if args.setup:
     exec(args.setup)
 
+# run processing
+original_line = None
+n = None
+
 
 def output(line):
     # output one or more lines
@@ -132,29 +154,68 @@ def output(line):
         # replace with the tuple of the groups or whole matched string (if no group matched)
         line = line.groups() or line.group(0)
     if line:  # empty string makes no output
-        if isinstance(line, str):
-            print(line)
+        if isinstance(line, (str, bytes)):
+            write(line)
         elif isinstance(line, list):  # list is output as multiple lines
             [output(el) for el in line]
         elif isinstance(line, Iterable):  # tuple or generator (but not a string) gets joined
-            print(", ".join(str(el) for el in line))
+            write(", ".join(str(el) for el in line))
         elif isinstance(line, Callable):  # tuple or generator (but not a string) gets joined
-            print(line())
+            argument = original_line or text  # in the `--finally` clause, original_line is empty, we use `text` instead
+            try:
+                write(line())
+            except TypeError:
+                # ex: `| pyed webbrowser.open` -> `| pyed webbrowser.open(s)`
+                # ex: `sqrt() takes exactly one argument (0 given)`
+                # ex: `open() missing required argument 'file' (pos 1)'` (build-in open)
+                # ex: `open() missing 1 required positional argument: 'url'` (webbrowser.open)
+                try:
+                    logger.debug(f"Trying `s` as the callable parameter")
+                    write(line(argument))
+                    command["command"] += "(s)"
+                    logger.debug("Worked!")
+                except TypeError:
+                    # Unfortunately, there is no certain way to determine the wanted type.
+                    # The wording of TypeError exceptions specifying the type vary.
+                    # The best we have is to use the inspect module to get the annotation or the parameter name.
+                    # We content to try it.
+                    if n is not None:
+                        try:
+                            logger.debug(f"Trying `n` as the callable parameter")
+                            write(line(n))  # ex: echo  5 | pyed sqrt | pyed round
+                            command["command"] += "(n)"
+                            logger.debug("Worked!")
+                        except TypeError:
+                            pass
+                    try:
+                        logger.debug(f"Trying `s.encode('utf-8')` as the callable parameter")
+                        write(line(argument.encode("utf-8")))  # ex: pyed b64encode += (s.encode('utf-8'))
+                        command["command"] += "(s.encode('utf-8'))"
+                        logger.debug("Worked!")
+                    except TypeError:
+                        raise
+
         else:  # ex: int, str
-            print(line)
+            write(line)
     else:
         if args.empty:
-            print(line)
+            write(line)
 
 
 while True:
     try:
-        s = next(loop).rstrip()
+        original_line = s = next(loop).rstrip()
+        # noinspection PyBroadException
         try:
+            # we prefer having int over float because adding values '5' + '5' as '10'
+            # looks better than '10.0' in most use cases
             n = int(s)
         except:
-            n = None
-            pass
+            # noinspection PyBroadException
+            try:
+                n = float(s)
+            except:
+                n = None
     except (KeyboardInterrupt, StopIteration):
         break
 
@@ -163,14 +224,15 @@ while True:
             # loop until all on the fly imports are done
             skip = None
             try:
-                # note that exec will not affect local field, hence we cannot easily put this in a method
+                # we process either a regular expression or a custom command
                 if regular_command:
                     try:
                         s = regular_command(s)
                     except re.error as e:
                         logger.error(f"{e}, regular expression: {command['command']} on line: {s}")
                         break
-                else:
+                else:  # resolving custom command
+                    # note that exec will not affect local field, hence we cannot easily put this in a method
                     exec(command["command"])
             except NameError as e:
                 name = re.match(r"name '(.*?)' is not defined", str(e))[1]
@@ -187,7 +249,7 @@ while True:
                         # ex sleep = getattr(module "time", "sleep")
                         globals()[name] = getattr(__import__(module), name)
                     elif name in available_modules:
-                        logger.warning(f"Importing {name}")
+                        logger.info(f"Importing {name}")
                         globals()[name] = __import__(name)
                     else:
                         raise
@@ -195,7 +257,6 @@ while True:
             else:
                 if skip or (skip_all and skip is not False):  # user chooses to filter out the line
                     break
-
                 output(s)
                 break
     except Exception as e:
@@ -204,6 +265,6 @@ while True:
 
 # run final script
 if command["finally"]:
-    s = None
+    original_line = s = n = None
     exec(command["finally"])
     output(s)
