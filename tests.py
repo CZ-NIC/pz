@@ -26,7 +26,7 @@ sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 forgotten_text = "Did not you forget to use --whole to access `text`?"
 
 
-class Testpz(unittest.TestCase):
+class TestMaster(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
     def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
@@ -79,7 +79,7 @@ class Testpz(unittest.TestCase):
         ...
 
 
-class TestFlags(Testpz):
+class TestFlags(TestMaster):
 
     def test_number_of_lines(self):
         self.assertEqual(3, len(self.go(self.col2, CSV, n=3)))
@@ -146,7 +146,7 @@ class TestFlags(Testpz):
         self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
 
-class TestVariables(Testpz):
+class TestVariables(TestMaster):
     # # deprecated
     # def test_lines(self):
     #     """ Possibility to use `lines` list instead of re-assigning `line`. """
@@ -191,10 +191,19 @@ class TestVariables(Testpz):
         self.go("s+5", "1", expect=[])
 
     def test_set(self):
-        self.go("Set.add(s)", "2\n1\n2\n3\n1", final="sorted(Set)", expect=["1", "2", "3"])
+        self.go("S.add(s)", "2\n1\n2\n3\n1", final="sorted(S)", expect=["1", "2", "3"])
+
+    def test_counter(self):
+        # unique letters
+        self.go("C.update(s)", "one two\nthree four two one", final="len(C)", expect=10)
+        # unique words
+        self.go("C.update(s.split())", "one two\nthree four two one", final="len(C)", expect=4)
+        # most common
+        self.go("C.update(s.split())", "one two\nthree four two one", final="C.most_common",
+                expect=["one, 2", "two, 2", "three, 1", "four, 1"])
 
 
-class TestReturnValues(Testpz):
+class TestReturnValues(TestMaster):
     """ Correct command prepending etc. """
 
     def go_csv(self, command):
@@ -202,11 +211,11 @@ class TestReturnValues(Testpz):
         self.assertEqual(10, len(ret))
         return ret
 
-    def test_single_line_without_assignement(self):
+    def test_single_line_without_assignment(self):
         """ `s = ` is prepended when not present"""
         self.assertEqual("Jamaica", self.go_csv(self.col2)[0])
 
-    def test_single_line_with_assignement(self):
+    def test_single_line_with_assignment(self):
         """ `s = ` is not prepended, assignement is already present """
         self.assertEqual("Jamaica", self.go_csv('s = ' + self.col2)[0])
 
@@ -240,6 +249,16 @@ class TestReturnValues(Testpz):
         self.go("n", num, final="sum", expect=["1", "2", "3", "4", "10"])
         self.go("1", num, final="sum", expect=["1", "1", "1", "1", "10"])
         self.go("", num, final="' - '.join", expect=["1 - 2 - 3 - 4"])
+
+    def test_callable_with_no_output(self):
+        """ When treating callable, we have to be able to put the line as its parameter.
+            However, we have to distinguish the cases when there is an output (should be displayed)
+            and there is no output (we must not print `None` unless --empty is set).
+        """
+        self.go("S.add", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "3"])
+        self.go("S.add(s)", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "3"])
+        self.go("S.add(s);s", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "2", "3", "1", "2", "3"])
+        self.go("S.add", "1\n2\n2\n3", empty=True, final="sorted(S)", expect=[*["None"] * 4, "1", "2", "3"])
 
     def test_iterable(self):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
@@ -311,7 +330,7 @@ class TestReturnValues(Testpz):
         self.go("b64encode(bytes(s, 'utf-8'))", "HEllO", expect="SEVsbE8=")
 
 
-class TestUsecases(Testpz):
+class TestUsecases(TestMaster):
     def test_random_number(self):
         self.assertTrue(0 < int(self.go(r'randint(1,10)', CSV)[0]) < 11)
 

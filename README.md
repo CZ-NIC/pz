@@ -99,20 +99,42 @@ $ echo -e "1\n2\n2\n3" | pz "skip = s in c; c.add(s)"  --setup "c=set()"
 
 However, an advantage over `| sort | uniq` comes when handling a stream. You see unique lines instantly, without waiting a stream to finish. Useful when using with `tail --follow`.
 
-Alternatively, to assure the values are sorted, we can make a use of `--finally` flag that produces the output after the processing finished. 
+Alternatively, to assure the values are sorted, we can make a use of `--finally` flag that produces the output after the processing finished.
 ```bash
-echo -e "1\n2\n2\n3" | pz "Set.add(s)" --finally "sorted(Set)"  -0
+echo -e "1\n2\n2\n3" | pz "S.add(s)" --finally "sorted(S)"  -0
 ```
 
-Note that we used the variable `Set` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
+Note that we used the variable `S` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
 
-<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = Set.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
+<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = S.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
 
-The fastest way would be then to use the `lines` variable, available when using the `--finally` clause.
+We can omit `(s)` in the `command` clause and hence get rid of the quotes all together.
+```bash
+echo -e "1\n2\n2\n3" | pz S.add --finally "sorted(S)"
+```
+
+Nevertheless, the most straightforward approach would involve the `lines` variable, available when using the `--finally` clause.
 
 ```bash
 echo -e "1\n2\n2\n3" | pz --finally "sorted(set(lines))"
 ``` 
+
+## Counting words
+
+We split the line to get the words and put them in `S`, a global instance of the `set`. Then, we print the set length to get the number of unique words.
+
+```bash
+echo -e "red green\nblue red green" | pz 'S.update(s.split())' --finally 'len(S)'  # 3
+```
+
+But what if we want to get the most common words and the count of its usages? Lets use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
+```bash
+echo -e "red green\nblue red green" | pz 'C.update(s.split())' --finally C.most_common
+red, 2
+green, 2
+blue, 1
+```
+
 
 ## Handling nested quotes
 To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used an apostrophe in the text, we had have to slash it. Instead, triple quotes might improve readability.
@@ -162,17 +184,18 @@ In the script scope, you have access to the following variables:
 * `skip`: If set to `True`, current line will not be output. If set to `False` when using the `-0` flag, the line will be output regardless. 
 * Other variables are initialized and ready to be used globally. They are common for all the lines.
     * `i = 0`
-    * `set_ = Set = set()`
-    * `list_ = List = list()`
-    * `dict_ = Dict = dict()`
+    * `S = set()`
+    * `L = list()`
+    * `D = dict()`
+    * `C = Counter()`
     ```bash
-    echo -e "2\n1\n2\n3\n1" | pz "Set.add(s)" --end "sorted(Set)"
+    echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
     1
     2
     3  
     ``` 
   
-    It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts. It is then up to you to decide using either `set_` or `Set`.
+    It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts.
 
 ## Auto-import
 

@@ -5,7 +5,7 @@ import logging
 import re
 import sys
 # noinspection PyUnresolvedReferences
-from collections import defaultdict
+from collections import defaultdict, Counter
 from collections.abc import Iterable, Callable
 from contextlib import contextmanager
 # noinspection PyUnresolvedReferences
@@ -129,7 +129,7 @@ def try_argument(callable_, argument, var, cmd="command"):
     """ Try to pass an argument to a callable. Returns False if TypeError happened. """
     t = f"attempt to use `{var}` as the callable parameter in {cmd}: {command[cmd]}({argument})"
     try:
-        write(callable_(argument))
+        output(callable_(argument))
         command[cmd] += f"({var})"
     except TypeError as e:
         logger.debug(f"Failed {t} with: {e}")
@@ -154,11 +154,11 @@ def output(line, final_round=None):
             write(", ".join(str(el) for el in line))
         elif isinstance(line, Callable):  # tuple or generator (but not a string) gets joined
             try:
-                write(line())
+                output(line())
             except TypeError:
                 if tried_to_correct_callable and not final_round:
                     # this it not the first line of command nor the `--finally` clause,
-                    # we have already been there withuot success
+                    # we have already been there without success
                     raise
                 tried_to_correct_callable = True
                 # ex: `| pz webbrowser.open` -> `| pz webbrowser.open(s)`
@@ -180,12 +180,14 @@ def output(line, final_round=None):
                         # ex: echo  5 | pz sqrt | pz round
                         attempts.append((n, "n"))
                     import inspect
-                    param = list(inspect.signature(line).parameters.values())[0]
-                    if param.name != "iterable":
-                        # ex: pz b64encode += (s.encode('utf-8'))
-                        attempts.append((original_line.encode("utf-8"), "s.encode('utf-8')"))
-                    else:
-                        logger.debug("We will not try `s.encode('utf-8')` automatically.")
+                    try:
+                        param = list(inspect.signature(line).parameters.values())[0]
+                        if param.name != "iterable":
+                            # ex: pz b64encode += (s.encode('utf-8'))
+                            logger.debug("Let's try `s.encode('utf-8')` automatically too.")
+                            attempts.append((original_line.encode("utf-8"), "s.encode('utf-8')"))
+                    except ValueError:  # ex: `set.add` raises no signature found
+                        pass
                 else:  # we are in the `--finally` clause, original_line is empty, we use `lines` or `numbers` instead
                     if len(numbers) == len(lines):
                         # ex: echo -e "1\n2\n3\n4" | pz --finally sum
@@ -215,9 +217,10 @@ def get_number(s):
 
 # variables available in the user scope
 i = 0
-set_ = Set = set()
-list_ = List = list()
-dict_ = Dict = dict()
+S = set()
+L = list()
+D = dict()
+C = Counter()
 skip = None  # if user sets to False, the line will not be output
 skip_all = getattr(args, "0")
 whole_hint_printed = False
