@@ -262,16 +262,18 @@ def prepare_command(name):
         # prepending `line = ` is not needed, the string is treated as a `match` parameter
         return
 
+    # check if there is only a single line with a missing assignment
     if (len(cmd.splitlines()) == 1
-            and not search("(s|skip)\s?[^=]?=[^=]", cmd)
+            and not search("(s|skip)\s?[^=]?=[^=]", cmd)  # ex:
+            # and not search("\(s\)", cmd)  # ex: L.append(s)
+            and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
             and ";" not in cmd
             and "lines." not in cmd):
-        # there is only a single line and without assignment
         # "s = 1" - will not pass
         # "s += 1" - will not pass
         # "s + 1" - will pass
         # "s == 1" - will pass
-        # "lines.append" - will not pass XX deprecated
+        # X "(s)" - will not pass (ex: L.append(s))
         command[name] = ("skip = not " if args.filter else "s = ") + cmd
         logger.debug(f"Changing the {name} clause to: {command[name]}")
 

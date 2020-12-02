@@ -24,17 +24,17 @@ wikipedia.com
   * [Handling nested quotes](#handling-nested-quotes)
 - [Docs](#docs)
   * [Scope variables](#scope-variables)
-    + [`s` – current line](#-s----current-line)
-    + [`n` – current line converted to an `int` (or `float`) if possible](#-n----current-line-converted-to-an--int---or--float---if-possible)
-    + [`text` – whole text, all lines together](#-text----whole-text--all-lines-together)
-    + [`lines` – list of lines so far processed](#-lines----list-of-lines-so-far-processed)
-    + [`numbers` – list of numbers so far processed](#-numbers----list-of-numbers-so-far-processed)
+    + [`s` – current line](#s--current-line)
+    + [`n` – current line converted to an `int` (or `float`) if possible](#n--current-line-converted-to-an-int-or-float-if-possible)
+    + [`text` – whole text, all lines together](#text--whole-text--all-lines-together)
+    + [`lines` – list of lines so far processed](#lines--list-of-lines-so-far-processed)
+    + [`numbers` – list of numbers so far processed](#numbers--list-of-numbers-so-far-processed)
     + [`skip` line](#-skip--line)
-    + [`i`, `S`, `L`, `D`, `C` – other global variables](#-i----s----l----d----c----other-global-variables)
+    + [`i`, `S`, `L`, `D`, `C` – other global variables](#i-s-l-d-c--other-global-variables)
   * [Auto-import](#auto-import)
   * [Output](#output)
   * [CLI flags](#cli-flags)
-    + [Regular flags](#regular-flags)
+    + [Regular expressions shortcuts](#regular-expresssions-shortcuts)
 
 # Installation
 Install with a single command from [PyPi](https://pypi.org/project/pz/).
@@ -236,7 +236,9 @@ Some variables are initialized and ready to be used globally. They are common fo
 * `D = dict()`
 * `C = Counter()`
 
-In the example, we add every line to `S` (a global `set`) and finally print out in a sorted manner.
+<sub>It is true that using uppercase is not conforming the naming convention. However in these tiny scripts the readability is the chief principle, every character counts.</sub>
+
+Using a set `S`. In the example, we add every line to the set and finally print it out in a sorted manner.
 ```bash
 echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --finally "sorted(S)"
 1
@@ -244,7 +246,11 @@ echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --finally "sorted(S)"
 3  
 ``` 
 
-It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts.
+Using a list `L`. Append lines that contains a number bigger than one and finally, print their count. As only the final count matters, suppress the line output with the flag `-0`. 
+```bash
+echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --finally "len(L)" -0
+3  
+```
 
 ## Auto-import
 
@@ -438,7 +444,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```
 * `-0`: Skip all lines output. (Useful in combination with `--finally`.)
 
-### Regular flags
+### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`
     ```bash
     $ echo -e "hello world\nanother words" | pyed --search ".*\s"

@@ -219,6 +219,13 @@ class TestReturnValues(TestMaster):
         """ `s = ` is not prepended, assignement is already present """
         self.assertEqual("Jamaica", self.go_csv('s = ' + self.col2)[0])
 
+    def test_keyword_without_assignment(self):
+        """ The command does not contain an assignment, however it starts with a keyword.
+            It would hence be a complex task to put there an assignment automatically.
+        """
+        # the command clause cannot be internally changed to `s = if ...`
+        self.go("if n > 1: L.append(s)", "2\n1\n2\n3\n1", final="len(L)", custom_cmd="-0", expect="3")
+
     def test_comparing(self):
         """ `s = ` is prepended, we do not get confused if '==' has already been present """
         self.assertEqual(['True'], self.go(self.col2 + ' == "Jamaica"', CSV))
