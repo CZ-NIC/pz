@@ -80,8 +80,11 @@ if getattr(args, "finally"):
 
 logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: logging.DEBUG}[args.verbose])
 
-
 # custom functions
+
+match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
+
+
 def write(s):
     """ Print either bytes or string. Bytes are not printed in the Python b-form: b'string' but raw. """
     if type(s) is bytes:
@@ -139,7 +142,7 @@ def try_argument(callable_, argument, var, cmd="command"):
 def output(line, final_round=None):
     """ output one or more lines """
     global tried_to_correct_callable
-    if isinstance(line, Match):
+    if isinstance(line, match_class):
         # replace with the tuple of the groups or whole matched string (if no group matched)
         line = line.groups() or line.group(0)
     if line:  # empty string makes no output
@@ -158,7 +161,7 @@ def output(line, final_round=None):
                     # we have already been there withuot success
                     raise
                 tried_to_correct_callable = True
-                # ex: `| pyed webbrowser.open` -> `| pyed webbrowser.open(s)`
+                # ex: `| pz webbrowser.open` -> `| pz webbrowser.open(s)`
                 # ex: `sqrt() takes exactly one argument (0 given)`
                 # ex: `open() missing required argument 'file' (pos 1)'` (build-in open)
                 # ex: `open() missing 1 required positional argument: 'url'` (webbrowser.open)
@@ -174,20 +177,20 @@ def output(line, final_round=None):
                     else:
                         logger.debug("Since `--lines` flag is off, we will not try `numbers`.")
                     if n is not None:
-                        # ex: echo  5 | pyed sqrt | pyed round
+                        # ex: echo  5 | pz sqrt | pz round
                         attempts.append((n, "n"))
                     import inspect
                     param = list(inspect.signature(line).parameters.values())[0]
                     if param.name != "iterable":
-                        # ex: pyed b64encode += (s.encode('utf-8'))
+                        # ex: pz b64encode += (s.encode('utf-8'))
                         attempts.append((original_line.encode("utf-8"), "s.encode('utf-8')"))
                     else:
                         logger.debug("We will not try `s.encode('utf-8')` automatically.")
                 else:  # we are in the `--finally` clause, original_line is empty, we use `lines` or `numbers` instead
                     if len(numbers) == len(lines):
-                        # ex: echo -e "1\n2\n3\n4" | pyed --finally sum
+                        # ex: echo -e "1\n2\n3\n4" | pz --finally sum
                         attempts.append((numbers, "numbers", "finally"))
-                    # ex: echo -e "1\n2\n3\n4" | pyed  --finally "' - '.join" ->  1 - 2 - 3 - 4
+                    # ex: echo -e "1\n2\n3\n4" | pz  --finally "' - '.join" ->  1 - 2 - 3 - 4
                     attempts.append((lines, "lines", "finally"))
                 if not any(try_argument(line, *x) for x in attempts):
                     raise

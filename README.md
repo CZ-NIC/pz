@@ -1,11 +1,11 @@
-# pyed
-[![Build Status](https://travis-ci.org/CZ-NIC/pyed.svg?branch=main)](https://travis-ci.org/CZ-NIC/pyed)
+# pz
+[![Build Status](https://travis-ci.org/CZ-NIC/pz.svg?branch=main)](https://travis-ci.org/CZ-NIC/pz)
 
-Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly now what command would you use in Python but you end up querying `man` again and again, read further. Pipe the contents in and let `pyed` to process it through your tiny Python script.
+Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. Then **`p`ythoni`z`e** it! Pipe the contents through `pz`, loaded with your tiny Python script.
 
 How? Simply meddle with the `s` variable. Example: appending '.com' to every line.
 ```bash
-$ echo -e "example\nwikipedia" | pyed 's += ".com"'
+$ echo -e "example\nwikipedia" | pz 's += ".com"'
 example.com
 wikipedia.com
 ```
@@ -20,16 +20,16 @@ wikipedia.com
     * [Regular flags](#regular-flags)
 
 # Installation
-Install with a single command from [PyPi](https://pypi.org/project/pyed/).
+Install with a single command from [PyPi](https://pypi.org/project/pz/).
 ```bash 
-pip3 install pyed    
+pip3 install pz    
 ```
 
-Or download and launch the [`pyed`](https://raw.githubusercontent.com/CZ-NIC/pyed/main/pyed) file from here.
+Or download and launch the [`pz`](https://raw.githubusercontent.com/CZ-NIC/pz/main/pz) file from here.
 
 # Examples
 
-How does your data look when `pyed`? Which Bash programs may the utility substitute?
+How does your data look when `pz`? Which Bash programs may the utility substitute?
 
 ## Extract a substring
 
@@ -37,7 +37,7 @@ Just use the `[:]` notation.
 
 ```
 bash
-echo "hello world" | pyed s[6:]  # hello
+echo "hello world" | pz s[6:]  # hello
 ```
 
 ## Prepend to every line in a stream
@@ -45,7 +45,7 @@ echo "hello world" | pyed s[6:]  # hello
 We prepend the length of the line.
 
 ```bash
-tail -f /var/log/syslog | pyed 'f"{len(s)}: {s}"'
+tail -f /var/log/syslog | pz 'f"{len(s)}: {s}"'
 ```
 
 ## Converting to uppercase
@@ -53,13 +53,13 @@ tail -f /var/log/syslog | pyed 'f"{len(s)}: {s}"'
 Replacing `| tr '[:upper:]' '[:lower:]'`.
 
 ```bash
-echo "HELLO" | pyed s.lower  # "hello"
+echo "HELLO" | pz s.lower  # "hello"
 ```
 ## Parsing numbers
 
-Replacing `cut`. Note you can chain multiple `pyed` calls. Split by comma '`,`', then use `n` to access the line converted to a number. 
+Replacing `cut`. Note you can chain multiple `pz` calls. Split by comma '`,`', then use `n` to access the line converted to a number. 
 ```bash
-echo "hello,5" | pyed 's.split(",")[1]' | pyed n+7  # 12
+echo "hello,5" | pz 's.split(",")[1]' | pz n+7  # 12
 ```
 
 ## Find out all URLs in a text
@@ -68,22 +68,22 @@ Replacing `sed`. We know that all functions from the `re` library are already in
 
 ```bash
 # either use the `--findall` flag
-pyed --findall "(https?://[^\s]+)" < file.log
+pz --findall "(https?://[^\s]+)" < file.log
 
 # or expand the full command to which is the `--findall` flag equivalent
-pyed "findall(r'(https?://[^\s]+)', s)" < file.log
+pz "findall(r'(https?://[^\s]+)', s)" < file.log
 ```
 
 If chained, you can open all the URLs in the current web browser. Note that the function `webbrowser.open` gets auto-imported from the standard library.
 ```bash
-pyed --findall "(https?://[^\s]+)" < file.log | pyed webbrowser.open
+pz --findall "(https?://[^\s]+)" < file.log | pz webbrowser.open
 ```
 
 ## Sum numbers
 Replacing `| awk '{count+=$1} END{print count}'` or `| paste -sd+ | bc`. Just use `sum` in the `--finally` clause.
 
 ```bash
-echo -e "1\n2\n3\n4" | pyed --finally sum  # 10
+echo -e "1\n2\n3\n4" | pz --finally sum  # 10
 ```
 
 ## Keep unique lines
@@ -91,7 +91,7 @@ echo -e "1\n2\n3\n4" | pyed --finally sum  # 10
 Replacing `| sort | uniq` makes little sense but the demonstration gives you the idea. We initialize a set `c` (like a *collection*). When processing a line, `skip` is set to `True` if already seen.  
 
 ```bash
-$ echo -e "1\n2\n2\n3" | pyed "skip = s in c; c.add(s)"  --setup "c=set()"
+$ echo -e "1\n2\n2\n3" | pz "skip = s in c; c.add(s)"  --setup "c=set()"
 1
 2
 3
@@ -101,21 +101,28 @@ However, an advantage over `| sort | uniq` comes when handling a stream. You see
 
 Alternatively, to assure the values are sorted, we can make a use of `--finally` flag that produces the output after the processing finished. 
 ```bash
-echo -e "1\n2\n2\n3" | pyed "Set.add(s)" --finally "sorted(Set)"  -0
+echo -e "1\n2\n2\n3" | pz "Set.add(s)" --finally "sorted(Set)"  -0
 ```
+
 Note that we used the variable `Set` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
 
-<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = Set.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub> 
+<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = Set.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
+
+The fastest way would be then to use the `lines` variable, available when using the `--finally` clause.
+
+```bash
+echo -e "1\n2\n2\n3" | pz --finally "sorted(set(lines))"
+``` 
 
 ## Handling nested quotes
 To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used an apostrophe in the text, we had have to slash it. Instead, triple quotes might improve readability.
 ```bash
-echo -e 'hello "world".' | pyed 'match(r"""[^"]*"(.*)".""", s)' # world
+echo -e 'hello "world".' | pz 'match(r"""[^"]*"(.*)".""", s)' # world
 ```
 
 In that case, even better is to use the `--match` flag to get rid of the quoting as much as possible.
 ```bash
-echo -e 'hello "world".' | pyed --match '[^"]*"(.*)"'  # world
+echo -e 'hello "world".' | pz --match '[^"]*"(.*)"'  # world
 ``` 
 
 # Docs
@@ -125,28 +132,28 @@ echo -e 'hello "world".' | pyed --match '[^"]*"(.*)"'  # world
 In the script scope, you have access to the following variables:
 * `s`: Current line, change it according to your needs
     ```bash
-    echo 5 | pyed 's += "4"'  # 54 
+    echo 5 | pz 's += "4"'  # 54 
     ```
 * `n`: Current line converted to an `int` (or `float`) if possible
     ```bash
-    echo 5 | pyed n+2  # 7
-    echo 5.2 | pyed n+2  # 7.2
+    echo 5 | pz n+2  # 7
+    echo 5.2 | pz n+2  # 7.2
     ```
 * `text`: Whole text, all lines together (available only with the `--whole` flag set)  
     Ex: get character count (an alternative to `| wc -c`).
     ```
-    echo -e "hello\nworld" | pyed --finally 'len(text)' --whole  # 12
+    echo -e "hello\nworld" | pz --finally 'len(text)' --whole  # 12
     ```
 * `lines`: List of lines so far processed (available only with the `--lines` flag set)  
     Ex: returning the last line
     ```bash
     # the `--lines` flag is automatically on when `--finally` used
-    echo -e "hello\nworld" | pyed --finally lines[-1]  # "world"
+    echo -e "hello\nworld" | pz --finally lines[-1]  # "world"
     ```
 * `numbers`: List of numbers so far processed (available only with the `--lines` flag set)  
     Ex: show current average of the stream. More specifically, we print out tuples: `line count, current line, average`.
     ```bash
-    $ echo -e "20\n40\n25\n28" | pyed 'i+=1; s = i, s, sum(numbers)/i' --lines
+    $ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i' --lines
     1, 20, 20.0
     2, 40, 30.0
     3, 25, 28.333333333333332
@@ -159,7 +166,7 @@ In the script scope, you have access to the following variables:
     * `list_ = List = list()`
     * `dict_ = Dict = dict()`
     ```bash
-    echo -e "2\n1\n2\n3\n1" | pyed "Set.add(s)" --end "sorted(Set)"
+    echo -e "2\n1\n2\n3\n1" | pz "Set.add(s)" --end "sorted(Set)"
     1
     2
     3  
@@ -177,7 +184,7 @@ In the script scope, you have access to the following variables:
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash
-echo -e "hey\nbuddy" | pyed 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -vv
+echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -vv
 Importing sleep from time
 2, 1
 3, 2
@@ -189,34 +196,34 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 ## Output
 * Explicit assignment: By default, we output the `s`.
     ```bash
-    echo "5" | pyed 's = len(s)' # 1
+    echo "5" | pz 's = len(s)' # 1
     ```
 * Single expression: If not set explicitly, we assign the expression to `s` automatically.
     ```bash
-    echo "5" | pyed 'len(s)'  # 1 (command internally changed to `s = len(s)`)
+    echo "5" | pz 'len(s)'  # 1 (command internally changed to `s = len(s)`)
     ```
 * Tuple, generator: If `s` ends up as a tuple, its get joined by spaces.
     ```bash
-    $ echo "5" | pyed 's, len(s)'
+    $ echo "5" | pz 's, len(s)'
     5, 1 
     ```
   
     Consider piping two lines 'hey' and 'buddy'. We return three elements, original text, reversed text and its length.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 's,s[::-1],len(s)' 
+    $ echo -e "hey\nbuddy" | pz 's,s[::-1],len(s)' 
     hey, yeh, 3
     buddy, yddub, 5
     ```
 * List: When `s` ends up as a list, its elements are printed to independent lines.
     ```bash
-    $ echo "5" | pyed '[s, len(s)]'
+    $ echo "5" | pz '[s, len(s)]'
     5
     1 
     ```
 * Regular match: All groups are treated as a tuple. If no group used, we print the entire matched string.
     ```bash
     # no group → print entire matched string
-    echo "hello world" | pyed 'search(r"\s.*", s)' # " world"
+    echo "hello world" | pz 'search(r"\s.*", s)' # " world"
   
     # single matched group
     echo "hello world" | pyed 'search(r"\s(.*)", s)' # "world"

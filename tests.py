@@ -26,12 +26,12 @@ sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 forgotten_text = "Did not you forget to use --whole to access `text`?"
 
 
-class Testpyed(unittest.TestCase):
+class Testpz(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
     def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
            expect=None, debug=False, verbosity=0, setup=None, final=None, sub=None):
-        cmd = ["./pyed"]
+        cmd = ["./pz"]
         if empty:
             cmd.append("--empty")
         if n:
@@ -79,7 +79,7 @@ class Testpyed(unittest.TestCase):
         ...
 
 
-class TestFlags(Testpyed):
+class TestFlags(Testpz):
 
     def test_number_of_lines(self):
         self.assertEqual(3, len(self.go(self.col2, CSV, n=3)))
@@ -98,7 +98,7 @@ class TestFlags(Testpyed):
         """ Exceptions are shown only if verbosity active. They are correctly printed to STDERR. """
 
         def check(verbosity=0, expect_stderr=b''):
-            p = Popen(["./pyed", "invalid line"] + ["-v"] * verbosity,
+            p = Popen(["./pz", "invalid line"] + ["-v"] * verbosity,
                       stdout=PIPE, stdin=PIPE, stderr=PIPE)
             stdout, stderr = p.communicate(input=b"1")
 
@@ -146,7 +146,7 @@ class TestFlags(Testpyed):
         self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
 
-class TestVariables(Testpyed):
+class TestVariables(Testpz):
     # # deprecated
     # def test_lines(self):
     #     """ Possibility to use `lines` list instead of re-assigning `line`. """
@@ -194,7 +194,7 @@ class TestVariables(Testpyed):
         self.go("Set.add(s)", "2\n1\n2\n3\n1", final="sorted(Set)", expect=["1", "2", "3"])
 
 
-class TestReturnValues(Testpyed):
+class TestReturnValues(Testpz):
     """ Correct command prepending etc. """
 
     def go_csv(self, command):
@@ -311,7 +311,7 @@ class TestReturnValues(Testpyed):
         self.go("b64encode(bytes(s, 'utf-8'))", "HEllO", expect="SEVsbE8=")
 
 
-class TestUsecases(Testpyed):
+class TestUsecases(Testpz):
     def test_random_number(self):
         self.assertTrue(0 < int(self.go(r'randint(1,10)', CSV)[0]) < 11)
 

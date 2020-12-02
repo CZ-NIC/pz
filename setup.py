@@ -8,17 +8,17 @@ if p.exists():
     long_description = p.read_text()
 
 setup(
-    name='pyed',
+    name='pz',
     version='0.9rc1',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
-    url='https://github.com/CZ-NIC/pyed',
+    url='https://github.com/CZ-NIC/pz',
     license='GNU GPLv3',
     description='Ever wished to use the Python syntax to work in Bash?'
-                ' Then do it and pipe the contents through your tiny Python script with `pyed` utility!',
+                ' Then pythonize it, piping the contents through your tiny Python script with `pz` utility!',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    scripts=['pyed'],
+    scripts=['pz'],
     classifiers=[
         'Programming Language :: Python :: 3'
     ],
