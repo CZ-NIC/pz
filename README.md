@@ -12,12 +12,29 @@ wikipedia.com
 
 - [Installation](#installation)
 - [Examples](#examples)
+  * [Extract a substring](#extract-a-substring)
+  * [Prepend to every line in a stream](#prepend-to-every-line-in-a-stream)
+  * [Converting to uppercase](#converting-to-uppercase)
+  * [Parsing numbers](#parsing-numbers)
+  * [Find out all URLs in a text](#find-out-all-urls-in-a-text)
+  * [Sum numbers](#sum-numbers)
+  * [Keep unique lines](#keep-unique-lines)
+  * [Counting words](#counting-words)
+  * [Fetching web content](#fetching-web-content)
+  * [Handling nested quotes](#handling-nested-quotes)
 - [Docs](#docs)
   * [Scope variables](#scope-variables)
+    + [`s` – current line](#-s----current-line)
+    + [`n` – current line converted to an `int` (or `float`) if possible](#-n----current-line-converted-to-an--int---or--float---if-possible)
+    + [`text` – whole text, all lines together](#-text----whole-text--all-lines-together)
+    + [`lines` – list of lines so far processed](#-lines----list-of-lines-so-far-processed)
+    + [`numbers` – list of numbers so far processed](#-numbers----list-of-numbers-so-far-processed)
+    + [`skip` line](#-skip--line)
+    + [`i`, `S`, `L`, `D`, `C` – other global variables](#-i----s----l----d----c----other-global-variables)
   * [Auto-import](#auto-import)
   * [Output](#output)
   * [CLI flags](#cli-flags)
-    * [Regular flags](#regular-flags)
+    + [Regular flags](#regular-flags)
 
 # Installation
 Install with a single command from [PyPi](https://pypi.org/project/pz/).
@@ -135,6 +152,23 @@ green, 2
 blue, 1
 ```
 
+## Fetching web content
+
+Accessing internet is easy thanks to the [`requests`](https://requests.readthedocs.io/en/master/) library. Here, we fetch `example.com`, grep it for all lines containing "href" and print them out while stripping spaces.
+
+```bash
+$ echo "http://example.com" | pz 'requests.get(s).content' | grep href | pz s.strip 
+<p><a href="https://www.iana.org/domains/example">More information...</a></p>
+```
+
+Too see how auto-import are resolved, use verbose mode. (Notice the line `Importing requests`.)
+```bash
+$ echo "http://example.com" | pz 'requests.get(s).content' -vvv | grep href | pz s.strip 
+Changing the command clause to: s = requests.get(s).content
+Importing requests
+<p><a href="https://www.iana.org/domains/example">More information...</a></p>
+```
+
 
 ## Handling nested quotes
 To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used an apostrophe in the text, we had have to slash it. Instead, triple quotes might improve readability.
@@ -152,58 +186,73 @@ echo -e 'hello "world".' | pz --match '[^"]*"(.*)"'  # world
 ## Scope variables
 
 In the script scope, you have access to the following variables:
-* `s`: Current line, change it according to your needs
-    ```bash
-    echo 5 | pz 's += "4"'  # 54 
-    ```
-* `n`: Current line converted to an `int` (or `float`) if possible
-    ```bash
-    echo 5 | pz n+2  # 7
-    echo 5.2 | pz n+2  # 7.2
-    ```
-* `text`: Whole text, all lines together (available only with the `--whole` flag set)  
-    Ex: get character count (an alternative to `| wc -c`).
-    ```
-    echo -e "hello\nworld" | pz --finally 'len(text)' --whole  # 12
-    ```
-* `lines`: List of lines so far processed (available only with the `--lines` flag set)  
-    Ex: returning the last line
-    ```bash
-    # the `--lines` flag is automatically on when `--finally` used
-    echo -e "hello\nworld" | pz --finally lines[-1]  # "world"
-    ```
-* `numbers`: List of numbers so far processed (available only with the `--lines` flag set)  
-    Ex: show current average of the stream. More specifically, we print out tuples: `line count, current line, average`.
-    ```bash
-    $ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i' --lines
-    1, 20, 20.0
-    2, 40, 30.0
-    3, 25, 28.333333333333332
-    4, 28, 28.25
-    ```
-* `skip`: If set to `True`, current line will not be output. If set to `False` when using the `-0` flag, the line will be output regardless. 
-* Other variables are initialized and ready to be used globally. They are common for all the lines.
-    * `i = 0`
-    * `S = set()`
-    * `L = list()`
-    * `D = dict()`
-    * `C = Counter()`
-    ```bash
-    echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
-    1
-    2
-    3  
-    ``` 
-  
-    It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts.
+
+### `s` – current line
+Change it according to your needs
+```bash
+echo 5 | pz 's += "4"'  # 54 
+```
+
+### `n` – current line converted to an `int` (or `float`) if possible
+```bash
+echo 5 | pz n+2  # 7
+echo 5.2 | pz n+2  # 7.2
+```
+
+### `text` – whole text, all lines together
+Available only with the `--whole` flag set.  
+Ex: get character count (an alternative to `| wc -c`).
+```
+echo -e "hello\nworld" | pz --finally 'len(text)' --whole  # 12
+```
+
+### `lines` – list of lines so far processed
+Available only with the `--lines` flag set.  
+Ex: returning the last line
+```bash
+# the `--lines` flag is automatically on when `--finally` used
+echo -e "hello\nworld" | pz --finally lines[-1]  # "world"
+```
+
+### `numbers` – list of numbers so far processed
+Available only with the `--lines` flag set.  
+Ex: show current average of the stream. More specifically, we print out tuples: `line count, current line, average`.
+```bash
+$ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i' --lines
+1, 20, 20.0
+2, 40, 30.0
+3, 25, 28.333333333333332
+4, 28, 28.25
+```
+
+### `skip` line
+If set to `True`, current line will not be output. If set to `False` when using the `-0` flag, the line will be output regardless.
+
+### `i`, `S`, `L`, `D`, `C` – other global variables
+Some variables are initialized and ready to be used globally. They are common for all the lines.
+* `i = 0`
+* `S = set()`
+* `L = list()`
+* `D = dict()`
+* `C = Counter()`
+
+In the example, we add every line to `S` (a global `set`) and finally print out in a sorted manner.
+```bash
+echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --finally "sorted(S)"
+1
+2
+3  
+``` 
+
+It is true that using uppercase is against naming convention. However in these tiny scripts the readability is the chief principle, every character counts.
 
 ## Auto-import
 
 * You can always import libraries you need manually. (Put `import` statement into the command.)
 * Some libraries are ready to be used: `re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...), defaultdict`
 * Some others are auto-imported whenever its use has been detected. In such case, the line is reprocessed.
-    * Functions: `(pathlib).Path, (time).sleep, (random).randint, (requests).get`
-    * Modules: `pathlib, time, jsonpickle, requests, humanize`
+    * Functions: `b64decode, b64encode, (requests).get, Path, randint, sleep`
+    * Modules: `base64, collections, humanize, jsonpickle, pathlib, random, requests, time, webbrowser`
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash

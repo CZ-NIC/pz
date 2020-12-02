@@ -9,7 +9,7 @@ if p.exists():
 
 setup(
     name='pz',
-    version='0.9rc1',
+    version='0.9',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pz',

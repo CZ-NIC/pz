@@ -26,15 +26,29 @@ available_names = {"Path": "pathlib",
                    "get": "requests",
                    "b64encode": "base64",
                    "b64decode": "base64"}
-available_modules = set(list(available_names.values()) + ["jsonpickle", "humanize", "webbrowser"])
+# XX
+#                    "reader": "csv",
+#                    "writer": "csv"
+# , "csv"
+available_modules = set(list(available_names.values()) + ["jsonpickle", "humanize", "webbrowser", "collections"])
 
-__doc__ = f"Launch your tiny Python script on a piped in contents and pipe it out" \
-          "\n" \
-          "\nAvailable without import:" \
-          f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...)," \
-          f" defaultdict" \
-          f"\n Auto-imported functions: {', '.join(available_names.keys())}" \
-          f"\n Auto-imported modules: {', '.join(available_modules)}"
+__doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it out"
+           "\n"
+           "\nAvailable without import:"
+           f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...),"
+           f" defaultdict"
+           f"\n Auto-imported functions: {', '.join(sorted(available_names.keys(), key=str.casefold))}"
+           f"\n Auto-imported modules: {', '.join(sorted(available_modules))}"
+           f"\n"
+           f"\nAvailable variables:"
+           f"\n * s – current line"
+           f"\n * n – current line converted to an `int` (or `float`) if possible"
+           f"\n * text – whole text, all lines together"
+           f"\n * lines – list of lines so far processed"
+           f"\n * numbers – list of numbers so far processed"
+           f"\n * skip – omit line if True"
+           f"\n * i=0, S=set(), L=list(), D=dict(), C=Counter() – other global variables"
+           )
 
 # parse arguments
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -59,10 +73,10 @@ parser.add_argument("--lines", help='Populate `lines` and `numbers` with lines. 
                                     ' cause an overflow when handling an infinite input.', action='store_true')
 
 regular = parser.add_argument_group("Regular output")
-regular.add_argument("--search", help='Equivalent to `search(COMMAND, line)`', action='store_true')
-regular.add_argument("--match", help='Equivalent to `match(COMMAND, line)`', action='store_true')
-regular.add_argument("--findall", help='Equivalent to `findall(COMMAND, line)`', action='store_true')
-regular.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, line)`', metavar="SUBSTITUTION")
+regular.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
+regular.add_argument("--match", help='Equivalent to `match(COMMAND, s)`', action='store_true')
+regular.add_argument("--findall", help='Equivalent to `findall(COMMAND, s)`', action='store_true')
+regular.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, s)`', metavar="SUBSTITUTION")
 
 # evaluate command line arguments
 args = parser.parse_args()
