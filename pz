@@ -109,7 +109,7 @@ def write(s):
 
 @contextmanager
 def auto_import():
-    """ If line processing failes with a NameError, check """
+    """ If line processing fails with a NameError, check """
     global whole_hint_printed
     try:
         yield
@@ -294,7 +294,10 @@ else:
 
 # run setup
 if args.setup:
-    exec(args.setup)
+    while True:
+        with auto_import():
+            exec(args.setup)
+            break
 
 # run processing
 tried_to_correct_callable = False
