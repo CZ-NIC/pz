@@ -1,7 +1,7 @@
 # pz
 [![Build Status](https://travis-ci.org/CZ-NIC/pz.svg?branch=main)](https://travis-ci.org/CZ-NIC/pz)
 
-Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. Then **`p`ythoni`z`e** it! Pipe the contents through `pz`, loaded with your tiny Python script.
+Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
 
 How? Simply meddle with the `s` variable. Example: appending '.com' to every line.
 ```bash
@@ -34,7 +34,7 @@ wikipedia.com
   * [Auto-import](#auto-import)
   * [Output](#output)
   * [CLI flags](#cli-flags)
-    + [Regular expressions shortcuts](#regular-expresssions-shortcuts)
+    + [Regular expressions shortcuts](#regular-expressions-shortcuts)
 
 # Installation
 Install with a single command from [PyPi](https://pypi.org/project/pz/).
@@ -46,7 +46,7 @@ Or download and launch the [`pz`](https://raw.githubusercontent.com/CZ-NIC/pz/ma
 
 # Examples
 
-How does your data look when `pz`? Which Bash programs may the utility substitute?
+How does your data look when pythonized via `pz`? Which Bash programs may the utility substitute?
 
 ## Extract a substring
 
@@ -100,6 +100,7 @@ pz --findall "(https?://[^\s]+)" < file.log | pz webbrowser.open
 Replacing `| awk '{count+=$1} END{print count}'` or `| paste -sd+ | bc`. Just use `sum` in the `--finally` clause.
 
 ```bash
+# internally changed to --finally `s = sum(numbers)`
 echo -e "1\n2\n3\n4" | pz --finally sum  # 10
 ```
 
@@ -304,29 +305,29 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     echo "hello world" | pz 'search(r"\s.*", s)' # " world"
   
     # single matched group
-    echo "hello world" | pyed 'search(r"\s(.*)", s)' # "world"
+    echo "hello world" | pz 'search(r"\s(.*)", s)' # "world"
   
     # matched groups treated as tuple
-    echo "hello world" | pyed 'search(r"(.*)\s(.*)", s)'  # "hello, world"
+    echo "hello world" | pz 'search(r"(.*)\s(.*)", s)'  # "hello, world"
     ```
 * Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.) Use 3 verbose flags `-vvv` to inspect the internal change of the command.
     ```bash
     # internally changed to `s = s.lower()`
-    echo "HEllO" | pyed s.lower  # "hello"
+    echo "HEllO" | pz s.lower  # "hello"
       
     # internally changed to `s = len(s)`
-    echo "HEllO" | pyed len  # "5"
+    echo "HEllO" | pz len  # "5"
   
     # internally changed to `s = base64.b64encode(s.encode('utf-8'))`
-    echo "HEllO" | pyed b64encode  # "SEVsbE8="
+    echo "HEllO" | pz b64encode  # "SEVsbE8="
   
     # internally changed to `s = math.sqrt(n)`
     # and then to `s = round(n)`
-    echo "25" | pyed sqrt | pyed round  # "5"
+    echo "25" | pz sqrt | pz round  # "5"
   
     # internally changed to `s = sum(numbers)`
     # `numbers` are available only when `--lines` or `--finally` set
-    echo -e "1\n2\n3\n4" | pyed sum --lines
+    echo -e "1\n2\n3\n4" | pz sum --lines
     1
     3
     6
@@ -334,7 +335,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   
     # internally changed to `' - '.join(lines)`
     # `lines` are available only when `--lines` or `--finally` set  
-    echo -e "1\n2\n3\n4" | pyed  --finally "' - '.join"
+    echo -e "1\n2\n3\n4" | pz  --finally "' - '.join"
     1 - 2 - 3 - 4
     ```
   
@@ -351,7 +352,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 * `--setup`: Any Python script, executed before processing. Useful for variable initializing.
     Ex: prepend line numbers by incrementing a variable `count`.
     ```bash
-    $ echo -e "row\nanother row" | pyed 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
+    $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
     1: row
     2: another row
     ```
@@ -359,15 +360,15 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 * `--finally`: Any Python script, executed after processing. Useful for final output.
     Turns on the `--lines` automatically because we do not expect an infinite stream.
     ```bash
-    $ echo -e "1\n2\n3\n4" | pyed --finally sum
+    $ echo -e "1\n2\n3\n4" | pz --finally sum
     10
-    $ echo -e "1\n2\n3\n4" | pyed s --finally sum
+    $ echo -e "1\n2\n3\n4" | pz s --finally sum
     1
     2
     3
     4
     10  
-    $ echo -e "1\n2\n3\n4" | pyed sum --finally sum
+    $ echo -e "1\n2\n3\n4" | pz sum --finally sum
     1
     3
     6
@@ -376,28 +377,28 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```
 * `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (attempts to make it callable and prepending `s =` if omitted).  
     ```bash
-    $ echo -e "hello" | pyed 'invalid command' # empty result
-    $ echo -e "hello" | pyed 'invalid command' -v
+    $ echo -e "hello" | pz 'invalid command' # empty result
+    $ echo -e "hello" | pz 'invalid command' -v
     Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: hello
-    $ echo -e "hello" | pyed 'sleep(1)' -vv
+    $ echo -e "hello" | pz 'sleep(1)' -vv
     Importing sleep from time
     ```
 * `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "n > 3"  --filter
+    $ echo -e "1\n2\n3\n4\n5" | pz "n > 3"  --filter
     4
     5
     ```
     The statement is equivalent to using `skip` (and not using `--filter`).
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "skip = not n > 3"
+    $ echo -e "1\n2\n3\n4\n5" | pz "skip = not n > 3"
     4
     5
     ```
     When not using filter, `s` evaluates to `True` / `False`. By default, `False` or empty values are not output. 
     ```bash
-    $ echo -e "1\n2\n3\n4\n5" | pyed "n > 3"   
+    $ echo -e "1\n2\n3\n4\n5" | pz "n > 3"   
     True
     True
     ```
@@ -405,13 +406,13 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 * `-1`: Process just the first line. Useful in combination with `--whole`.
 * `--whole`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
     ```bash
-    $ echo -e "1\n2\n3" | pyed 'len(text)' 
+    $ echo -e "1\n2\n3" | pz 'len(text)' 
     Did not you forget to use --whole?
     ```
   
     Appending `--whole` helps but the result is processed for every line again.
     ```bash
-    $ echo -e "1\n2\n3" | pyed 'len(text)' -w 
+    $ echo -e "1\n2\n3" | pz 'len(text)' -w 
     6
     6
     6
@@ -419,12 +420,12 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   
     Appending `-1` makes sure the statement gets computed only once. 
     ```bash
-    $ echo -e "1\n2\n3" | pyed 'len(text)' -w1
+    $ echo -e "1\n2\n3" | pz 'len(text)' -w1
     6    
     ```
 * `--lines`: Populate `lines` and `numbers` with lines. This is off by default since this would cause an overflow when handling an infinite input.
     ```bash
-    $ echo -e "1\n2\n3\n4" | pyed sum  --lines  # (internally changed to `s = sum(numbers)`
+    $ echo -e "1\n2\n3\n4" | pz sum  --lines  # (internally changed to `s = sum(numbers)`
     1
     3
     6
@@ -433,12 +434,12 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 's[:-3]'
+    $ echo -e "hey\nbuddy" | pz 's[:-3]'
     bu
     ```
     Should we insist on displaying, we see an empty line now.
     ```bash
-    $ echo -e "hey\nbuddy" | pyed 's[:-3]' --empty
+    $ echo -e "hey\nbuddy" | pz 's[:-3]' --empty
     
     bu
     ```
@@ -447,7 +448,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 ### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`
     ```bash
-    $ echo -e "hello world\nanother words" | pyed --search ".*\s"
+    $ echo -e "hello world\nanother words" | pz --search ".*\s"
     hello
     another
     ```
@@ -455,14 +456,14 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 * `--findall`: Equivalent to `findall(COMMAND, s)`
 * `--sub SUBSTITUTION`: Equivalent to `sub(COMMAND, SUBSTITUTION, s)`
     ```bash
-    $ echo -e "hello world\nanother words" | pyed --sub ":" ".*\s"
+    $ echo -e "hello world\nanother words" | pz ".*\s" --sub ":"
     :world
     :words
     ```
     
     Using groups
     ```bash
-    $ echo -e "hello world\nanother words" | pyed --sub "\1" "(.*)\s"
+    $ echo -e "hello world\nanother words" | pz "(.*)\s" --sub "\1"
     helloworld
     anotherwords
     ```
