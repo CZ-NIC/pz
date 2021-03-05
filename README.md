@@ -22,6 +22,7 @@ wikipedia.com
   * [Counting words](#counting-words)
   * [Fetching web content](#fetching-web-content)
   * [Handling nested quotes](#handling-nested-quotes)
+  * [Computing factorial](#computing-factorial)
 - [Docs](#docs)
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
@@ -124,7 +125,7 @@ echo -e "1\n2\n2\n3" | pz "S.add(s)" --end "sorted(S)"  -0
 
 Note that we used the variable `S` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
 
-<sub>(Strictly speaking we could omit `-0` too. If you use the most verbose `-vvv` flag, you would see the command changed to `s = S.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
+<sub>(Strictly speaking we could omit `-0` too. If you use the verbose `-v` flag, you would see the command changed to `s = S.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
 
 We can omit `(s)` in the `command` clause and hence get rid of the quotes all together.
 ```bash
@@ -162,9 +163,9 @@ $ echo "http://example.com" | pz 'requests.get(s).content' | grep href | pz s.st
 <p><a href="https://www.iana.org/domains/example">More information...</a></p>
 ```
 
-Too see how auto-import are resolved, use verbose mode. (Notice the line `Importing requests`.)
+To see how auto-import are resolved, use the verbose mode. (Notice the line `Importing requests`.)
 ```bash
-$ echo "http://example.com" | pz 'requests.get(s).content' -vvv | grep href | pz s.strip 
+$ echo "http://example.com" | pz 'requests.get(s).content' -v | grep href | pz s.strip 
 Changing the command clause to: s = requests.get(s).content
 Importing requests
 <p><a href="https://www.iana.org/domains/example">More information...</a></p>
@@ -234,10 +235,10 @@ echo 5.2 | pz n+2  # 7.2
 ```
 
 ### `text` – whole text, all lines together
-Available only with the `--whole` flag set.  
+Available only with the `--text` flag set or in the `--end` clause.  
 Ex: get character count (an alternative to `| wc -c`).
 ```
-echo -e "hello\nworld" | pz --end 'len(text)' --whole  # 12
+echo -e "hello\nworld" | pz --end 'len(text)' --text  # 12
 ```
 
 ### `lines` – list of lines so far processed
@@ -296,7 +297,7 @@ echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash
-echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -vv
+echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -v
 Importing sleep from time
 2, 1
 3, 2
@@ -343,7 +344,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     # matched groups treated as tuple
     echo "hello world" | pz 'search(r"(.*)\s(.*)", s)'  # "hello, world"
     ```
-* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.) Use 3 verbose flags `-vvv` to inspect the internal change of the command.
+* Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.) Use the verbose flag `-v` to inspect the internal change of the command.
     ```bash
     # internally changed to `s = s.lower()`
     echo "HEllO" | pz s.lower  # "hello"
@@ -408,14 +409,17 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     10
     10
     ```
-* `--verbose`: If you end up with no output, turn on to see what happened. Used once: show command exceptions. Twice: show automatic imports. Thrice: see internal command modification (attempts to make it callable and prepending `s =` if omitted).  
+* `--verbose`: See what happens under the hood. Show automatic imports and internal command modification (attempts to make it callable and prepending `s =` if omitted).  
     ```bash
-    $ echo -e "hello" | pz 'invalid command' # empty result
-    $ echo -e "hello" | pz 'invalid command' -v
+    $ echo -e "hello" | pz 'invalid command'
     Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: hello
-    $ echo -e "hello" | pz 'sleep(1)' -vv
+    $ echo -e "hello" | pz 'sleep(1)' --verbose
     Importing sleep from time
     ```
+* `-q`, `--quiet`: See errors and values only. Suppress command exceptions.
+  ```bash
+  $ echo -e "hello" | pz 'invalid command' --quiet # empty result
+  ```
 * `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
     ```bash
@@ -436,16 +440,16 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     True
     ```
 * `n`: Process only such number of lines. Roughly equivalent to `head -n`.
-* `-1`: Process just the first line. Useful in combination with `--whole`.
-* `--whole`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
+* `-1`: Process just the first line. Useful in combination with `--text`.
+* `t`, `--text`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
     ```bash
     $ echo -e "1\n2\n3" | pz 'len(text)' 
-    Did not you forget to use --whole?
+    Did not you forget to use --text?
     ```
   
-    Appending `--whole` helps but the result is processed for every line again.
+    Appending `--text` helps but the result is processed for every line again.
     ```bash
-    $ echo -e "1\n2\n3" | pz 'len(text)' -w 
+    $ echo -e "1\n2\n3" | pz 'len(text)' -t 
     6
     6
     6
@@ -453,7 +457,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   
     Appending `-1` makes sure the statement gets computed only once. 
     ```bash
-    $ echo -e "1\n2\n3" | pz 'len(text)' -w1
+    $ echo -e "1\n2\n3" | pz 'len(text)' -t1
     6    
     ```
 * `--lines`: Populate `lines` and `numbers` with lines. This is off by default due to an overflow when handling an infinite input.

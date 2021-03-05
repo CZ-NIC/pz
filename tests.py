@@ -1,7 +1,7 @@
 import logging
 import sys
 import unittest
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE, STDOUT, DEVNULL
 from typing import Optional
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -24,14 +24,16 @@ adipiscing elit http://nic.cz http://example.com
 sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 """
 
-forgotten_text = "Did not you forget to use --whole to access `text`?"
+forgotten_text = "Did you not forget to use --text to access `text`?"
+exc_text = "Exception: <class 'NameError'> name 'text' is not defined on line: "
 
 
 class TestMaster(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
-    def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
-           expect=None, debug=False, verbosity=0, setup=None, end=None, sub=None, generate: Optional[str] = None):
+    def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, text=False, custom_cmd=None,
+           expect=None, debug=False, verbosity=0, quiet=False, setup=None, end=None, sub=None,
+           generate: Optional[str] = None, stderr=STDOUT):
         """
 
         @param command:
@@ -39,15 +41,17 @@ class TestMaster(unittest.TestCase):
         @param previous_command:
         @param empty:
         @param n:
-        @param whole:
+        @param text:
         @param custom_cmd:
         @param expect:
         @param debug:
         @param verbosity:
+        @param quiet:
         @param setup:
         @param end:
         @param sub:
         @param generate: The generate clause
+        @param stderr:
         @return:
         """
         cmd = ["./pz", command]
@@ -55,12 +59,14 @@ class TestMaster(unittest.TestCase):
             cmd.append("--empty")
         if n:
             cmd.extend(("-n", str(n)))
-        if whole:
-            cmd.append("--whole")
+        if text:
+            cmd.append("--text")
         if custom_cmd:
             cmd.append(custom_cmd)
         if verbosity:
             cmd.extend(["-v"] * verbosity)
+        if quiet:
+            cmd.append("-q")
         if setup:
             cmd.extend(["--setup", setup])
         if end:
@@ -80,14 +86,14 @@ class TestMaster(unittest.TestCase):
             print("Command", cmd)
 
         if previous_command:
-            p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
-            stdout, stderr = p.communicate()
+            p = Popen(cmd, shell=True, stdout=PIPE, stderr=stderr)
+            stdout = p.communicate()[0]
         elif piped_text:
-            p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
-            stdout, stderr = p.communicate(input=piped_text.encode("utf-8"))
+            p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=stderr)
+            stdout = p.communicate(input=piped_text.encode("utf-8"))[0]
         elif generate is not None:
-            p = Popen(cmd, stdout=PIPE, stderr=STDOUT)
-            stdout, stderr = p.communicate()
+            p = Popen(cmd, stdout=PIPE, stderr=stderr)
+            stdout = p.communicate()[0]
         else:
             raise AttributeError("Specify either piped_text, previous_command or generate")
 
@@ -119,35 +125,37 @@ class TestFlags(TestMaster):
 
         # when verbosity increased, we should get notified when an import happened
         self.go(r'Path("/")', previous_command="echo '123'", verbosity=0, expect='/')
-        self.go(r'Path("/")', previous_command="echo '123'", verbosity=1, expect='/')
-        self.go(r'Path("/")', previous_command="echo '123'", verbosity=2, expect=['Importing Path from pathlib', '/'])
+        self.go(r'Path("/")', previous_command="echo '123'", verbosity=1,
+                expect=['Changing the main clause to: s = Path("/")', 'Importing Path from pathlib', '/'])
 
     def test_failed_line(self):
-        """ Exceptions are shown only if verbosity active. They are correctly printed to STDERR. """
+        """ Exceptions are shown only if verbosity active. They are correctly printed to STDERR.
+        (Note that self.go will pipe STDERR to STDOUT too, hence we do not use it here.)
+        """
 
-        def check(verbosity=0, expect_stderr=b''):
-            p = Popen(["./pz", "invalid line"] + ["-v"] * verbosity,
+        def check(verbosity=0, quiet=0, expect_stderr=b''):
+            p = Popen(["./pz", "invalid line"] + ["-v"] * verbosity + ["-q"] * quiet,
                       stdout=PIPE, stdin=PIPE, stderr=PIPE)
             stdout, stderr = p.communicate(input=b"1")
 
             self.assertEqual(b'', stdout)
             self.assertEqual(expect_stderr, stderr)
 
+        auto_import_text = b"Changing the main clause to: s = invalid line\n"
         exception_text = b"Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: 1\n"
-        check(verbosity=0)
-        check(verbosity=1, expect_stderr=exception_text)
-        check(verbosity=2, expect_stderr=exception_text)
+        check(quiet=1)
+        check(verbosity=0, expect_stderr=exception_text)
+        check(verbosity=1, expect_stderr=auto_import_text+ exception_text)
 
     def test_debugging(self):
-        """ No access to `text` variable. (Not fetched by --whole, should produce an invisible exception.) """
+        """ No access to `text` variable. (Not fetched by --text, should produce an invisible exception.) """
         # verbosity 0
-        self.go(r"len(text)", LOREM, expect=forgotten_text, n=1)
+        self.go(r"len(text)", LOREM, n=1, quiet=True)
 
         # increased verbosity
-        self.go(r"len(text)", LOREM, verbosity=1, n=1,
-                expect=[forgotten_text, "Exception: <class 'NameError'> name 'text' is not defined"
-                                        " on line: Lorem ipsum dolor sit amet http://example.com"
-                                        " consectetur http://csirt.cz"])
+        self.go(r"len(text)", LOREM, n=1, verbosity=0,
+                expect=[forgotten_text,
+                        exc_text + "Lorem ipsum dolor sit amet http://example.com consectetur http://csirt.cz"])
 
     def test_filter(self):
         expect = [line for line in LOREM.splitlines() if len(line) > 20]
@@ -173,6 +181,14 @@ class TestFlags(TestMaster):
         # `skip` can override just some cases, others remain skipped through `-0` by default
         self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
+    def test_text(self):
+        """ The `text` variable is available during processing only when the flag `--text`
+         is on or always in the `end` clause. """
+        self.go(end="len(text)", piped_text="hello", expect=5, text=False)
+        self.go(end="len(text)", piped_text="hello", expect=5, text=True)
+        self.go("len(text)", piped_text="hello", expect=5, text=True)
+        self.go("len(text)", piped_text="hello", expect=[], text=False, quiet=True)
+
 
 class TestVariables(TestMaster):
     # # deprecated
@@ -184,15 +200,16 @@ class TestVariables(TestMaster):
     #                          self.go(r"lines.extend(search(r'(https?://[^\s]+)', line).groups())", LOREM))
 
     def test_text(self):
-        """ Access to the `list` variable depends on the `--whole` flag. """
+        """ Access to the `list` variable depends on the `--text` flag. """
         # Single line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-1w", expect=["210"])
+        self.go(r"len(text)", LOREM, custom_cmd="-1t", expect=["210"])
 
         # All line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-w", expect=["210"] * 4)
+        self.go(r"len(text)", LOREM, custom_cmd="-t", expect=["210"] * 4)
 
         # No access to `text` variable. (Not fetched, should produce an invisible exception.)
-        self.go(r"len(text)", LOREM, expect=forgotten_text)
+        self.go(r"len(text)", LOREM, expect=[forgotten_text] + [exc_text + v for v in LOREM.splitlines()])
+        self.go(r"len(text)", LOREM, expect=[], quiet=True)
 
     def test_skip(self):
         """ Variable can be skipped """
@@ -208,15 +225,15 @@ class TestVariables(TestMaster):
 
         # search first URL on a line
         self.assertListEqual(['http://example.com', 'https://example.org', 'http://nic.cz'],
-                             self.go(r"search(r'(https?://[^\s]+)', s)[0]", LOREM))
+                             self.go(r"search(r'(https?://[^\s]+)', s)[0]", LOREM, stderr=DEVNULL))
 
         # Pass line if it begins with an URL
         self.assertListEqual(['https://example.org'],
-                             self.go(r"match(r'(https?://[^\s]+)', s)[0]", LOREM))
+                             self.go(r"match(r'(https?://[^\s]+)', s)[0]", LOREM, stderr=DEVNULL))
 
     def test_number(self):
         self.go("n+5", "1", expect=6)
-        self.go("s+5", "1", expect=[])
+        self.go("s+5", "1", expect=[], quiet=True)
 
     def test_set(self):
         self.go("S.add(s)", "2\n1\n2\n3\n1", end="sorted(S)", expect=["1", "2", "3"])
@@ -280,7 +297,7 @@ class TestReturnValues(TestMaster):
         # This is counter-intuitive but I do not want to allow --lines by default
         # since it overflows while processing an infinite input stream.
         # XX self.go("sum", num, expect=["49", "50", "51", "52"])
-        self.go("sum", num, expect=[])  # missing --lines
+        self.go("sum", num, expect=[], quiet=True)  # missing --lines
 
         self.go("sum", num, expect=["1", "3", "6", "10"], custom_cmd="--lines")
 
