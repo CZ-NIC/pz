@@ -2,6 +2,7 @@ import logging
 import sys
 import unittest
 from subprocess import Popen, PIPE, STDOUT
+from typing import Optional
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
@@ -30,8 +31,26 @@ class TestMaster(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
     def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, whole=False, custom_cmd=None,
-           expect=None, debug=False, verbosity=0, setup=None, final=None, sub=None):
-        cmd = ["./pz"]
+           expect=None, debug=False, verbosity=0, setup=None, end=None, sub=None, generate: Optional[str] = None):
+        """
+
+        @param command:
+        @param piped_text:
+        @param previous_command:
+        @param empty:
+        @param n:
+        @param whole:
+        @param custom_cmd:
+        @param expect:
+        @param debug:
+        @param verbosity:
+        @param setup:
+        @param end:
+        @param sub:
+        @param generate: The generate clause
+        @return:
+        """
+        cmd = ["./pz", command]
         if empty:
             cmd.append("--empty")
         if n:
@@ -44,24 +63,33 @@ class TestMaster(unittest.TestCase):
             cmd.extend(["-v"] * verbosity)
         if setup:
             cmd.extend(["--setup", setup])
-        if final:
-            cmd.extend(["--end", final])
+        if end:
+            cmd.extend(["--end", end])
         if sub:
             cmd.extend(["--sub", sub])
+        if generate is not None:
+            cmd.append("--generate")  # this flag might be empty as it has a default value
+            if generate:
+                cmd.append(generate)
 
         if previous_command:
-            cmd = previous_command + " | " + " ".join(cmd) + f" '{command}'"
-            if debug:
-                print("Command", cmd)
+            cmd[1] = f"'{cmd[1]}'"  # this is the main command clause, need to quote while text-joining
+            cmd = previous_command + " | " + " ".join(cmd)
+
+        if debug:
+            print("Command", cmd)
+
+        if previous_command:
             p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
             stdout, stderr = p.communicate()
         elif piped_text:
-            if debug:
-                print("Command", cmd + [command])
-            p = Popen(cmd + [command], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+            p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
             stdout, stderr = p.communicate(input=piped_text.encode("utf-8"))
+        elif generate is not None:
+            p = Popen(cmd, stdout=PIPE, stderr=STDOUT)
+            stdout, stderr = p.communicate()
         else:
-            raise AttributeError("Specify either piped_text or previous_command")
+            raise AttributeError("Specify either piped_text, previous_command or generate")
 
         val = stdout.decode().rstrip().splitlines()
         if debug:
@@ -191,16 +219,21 @@ class TestVariables(TestMaster):
         self.go("s+5", "1", expect=[])
 
     def test_set(self):
-        self.go("S.add(s)", "2\n1\n2\n3\n1", final="sorted(S)", expect=["1", "2", "3"])
+        self.go("S.add(s)", "2\n1\n2\n3\n1", end="sorted(S)", expect=["1", "2", "3"])
 
     def test_counter(self):
         # unique letters
-        self.go("C.update(s)", "one two\nthree four two one", final="len(C)", expect=10)
+        self.go("C.update(s)", "one two\nthree four two one", end="len(C)", expect=10)
         # unique words
-        self.go("C.update(s.split())", "one two\nthree four two one", final="len(C)", expect=4)
+        self.go("C.update(s.split())", "one two\nthree four two one", end="len(C)", expect=4)
         # most common
-        self.go("C.update(s.split())", "one two\nthree four two one", final="C.most_common",
+        self.go("C.update(s.split())", "one two\nthree four two one", end="C.most_common",
                 expect=["one, 2", "two, 2", "three, 1", "four, 1"])
+
+    def test_generator(self):
+        self.go("n", generate="2", expect=["1", "2"])
+        self.go("n+2", generate="", expect=["3", "4", "5", "6", "7"])
+        self.go("factorial", generate="", expect=["1", "2", "6", "24", "120"])
 
 
 class TestReturnValues(TestMaster):
@@ -224,7 +257,7 @@ class TestReturnValues(TestMaster):
             It would hence be a complex task to put there an assignment automatically.
         """
         # the command clause cannot be internally changed to `s = if ...`
-        self.go("if n > 1: L.append(s)", "2\n1\n2\n3\n1", final="len(L)", custom_cmd="-0", expect="3")
+        self.go("if n > 1: L.append(s)", "2\n1\n2\n3\n1", end="len(L)", custom_cmd="-0", expect="3")
 
     def test_comparing(self):
         """ `s = ` is prepended, we do not get confused if '==' has already been present """
@@ -251,21 +284,21 @@ class TestReturnValues(TestMaster):
 
         self.go("sum", num, expect=["1", "3", "6", "10"], custom_cmd="--lines")
 
-        self.go("", num, final="sum", expect="10")
-        self.go("sum", num, final="sum", expect=["1", "3", "6", "10", "10"])
-        self.go("n", num, final="sum", expect=["1", "2", "3", "4", "10"])
-        self.go("1", num, final="sum", expect=["1", "1", "1", "1", "10"])
-        self.go("", num, final="' - '.join", expect=["1 - 2 - 3 - 4"])
+        self.go("", num, end="sum", expect="10")
+        self.go("sum", num, end="sum", expect=["1", "3", "6", "10", "10"])
+        self.go("n", num, end="sum", expect=["1", "2", "3", "4", "10"])
+        self.go("1", num, end="sum", expect=["1", "1", "1", "1", "10"])
+        self.go("", num, end="' - '.join", expect=["1 - 2 - 3 - 4"])
 
     def test_callable_with_no_output(self):
         """ When treating callable, we have to be able to put the line as its parameter.
             However, we have to distinguish the cases when there is an output (should be displayed)
             and there is no output (we must not print `None` unless --empty is set).
         """
-        self.go("S.add", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "3"])
-        self.go("S.add(s)", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "3"])
-        self.go("S.add(s);s", "1\n2\n2\n3", final="sorted(S)", expect=["1", "2", "2", "3", "1", "2", "3"])
-        self.go("S.add", "1\n2\n2\n3", empty=True, final="sorted(S)", expect=[*["None"] * 4, "1", "2", "3"])
+        self.go("S.add", "1\n2\n2\n3", end="sorted(S)", expect=["1", "2", "3"])
+        self.go("S.add(s)", "1\n2\n2\n3", end="sorted(S)", expect=["1", "2", "3"])
+        self.go("S.add(s);s", "1\n2\n2\n3", end="sorted(S)", expect=["1", "2", "2", "3", "1", "2", "3"])
+        self.go("S.add", "1\n2\n2\n3", empty=True, end="sorted(S)", expect=[*["None"] * 4, "1", "2", "3"])
 
     def test_iterable(self):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])

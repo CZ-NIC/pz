@@ -182,6 +182,39 @@ In that case, even better is to use the `--match` flag to get rid of the quoting
 echo -e 'hello "world".' | pz --match '[^"]*"(.*)"'  # world
 ``` 
 
+## Computing factorial
+
+Take a look at multiple ways. The simplest is to use the function.
+
+```bash
+echo 5 | pz factorial  # 120
+```
+
+What happens in the background? `factorial` is available from `math.factorial`. Since it is a callable, we try to put current line as the parameter: `factorial(s)`. Since `s = "5"` which means a string, it fails. It then tries to use `factorial(n)` where `n` is current line automatically fetched to a number. That works.
+
+Harder way? Let's use `math.prod` then.
+
+```bash
+echo 5 | pz 'prod(i for i in range(1,n+1))'  # 120
+```
+
+Without any built-in library? Let's just use a for-cycle. Process all numbers from 1 to `n` (which is 5) and multiply to product. Finally, assign `n` to `s` which is output.
+
+```bash
+echo 5 | pz 'for c in range(1,n): n*= c ; s = n'   # 120
+```
+
+Using generator will print a factorial for every number from 1 to `-g`.
+
+```bash
+pz factorial -g5
+1
+2
+6
+24
+120
+```
+
 # Docs
 
 ## Scope variables
@@ -258,8 +291,8 @@ echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 * You can always import libraries you need manually. (Put `import` statement into the command.)
 * Some libraries are ready to be used: `re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...), defaultdict`
 * Some others are auto-imported whenever its use has been detected. In such case, the line is reprocessed.
-    * Functions: `b64decode, b64encode, (requests).get, Path, randint, sleep`
-    * Modules: `base64, collections, humanize, jsonpickle, pathlib, random, requests, time, webbrowser`
+    * Functions: `b64decode, b64encode, (requests).get, glob, iglob, Path, randint, sleep, ZipFile`
+    * Modules: `base64, collections, csv, humanize, itertools, jsonpickle, pathlib, random, requests, time, webbrowser, zipfile`
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash
@@ -349,7 +382,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 
 ## CLI flags
 * `command`: Any Python script (multiple statements allowed)
-* `--setup`: Any Python script, executed before processing. Useful for variable initializing.
+* `-S`, `--setup`: Any Python script, executed before processing. Useful for variable initializing.
     Ex: prepend line numbers by incrementing a variable `count`.
     ```bash
     $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
@@ -357,7 +390,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     2: another row
     ```
     <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
-* `--end`: Any Python script, executed after processing. Useful for final output.
+* `-E`, `--end`: Any Python script, executed after processing. Useful for final output.
     Turns on the `--lines` automatically because we do not expect an infinite stream.
     ```bash
     $ echo -e "1\n2\n3\n4" | pz --end sum
@@ -423,7 +456,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     $ echo -e "1\n2\n3" | pz 'len(text)' -w1
     6    
     ```
-* `--lines`: Populate `lines` and `numbers` with lines. This is off by default since this would cause an overflow when handling an infinite input.
+* `--lines`: Populate `lines` and `numbers` with lines. This is off by default due to an overflow when handling an infinite input.
     ```bash
     $ echo -e "1\n2\n3\n4" | pz sum  --lines  # (internally changed to `s = sum(numbers)`
     1
@@ -444,6 +477,19 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     bu
     ```
 * `-0`: Skip all lines output. (Useful in combination with `--end`.)
+* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count. If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. 
+  ```bash
+  $ pz n -g2
+  1
+  2
+  $ pz 'i=i+5' -g -vvv
+  Changing the main clause to: s = i=i+5
+  5
+  10
+  15
+  20
+  25
+  ```
 
 ### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`

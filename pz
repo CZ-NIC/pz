@@ -10,7 +10,7 @@ from collections.abc import Iterable, Callable
 from contextlib import contextmanager
 # noinspection PyUnresolvedReferences
 from datetime import *
-from itertools import islice
+from itertools import islice, count
 # noinspection PyUnresolvedReferences
 from math import *
 from re import *
@@ -25,12 +25,13 @@ available_names = {"Path": "pathlib",
                    "randint": "random",
                    "get": "requests",
                    "b64encode": "base64",
-                   "b64decode": "base64"}
-# XX
-#                    "reader": "csv",
-#                    "writer": "csv"
-# , "csv"
-available_modules = set(list(available_names.values()) + ["jsonpickle", "humanize", "webbrowser", "collections"])
+                   "b64decode": "base64",
+                   "glob": "glob",
+                   "iglob": "glob",
+                   "ZipFile": "zipfile"}
+_module_clash = {v for k, v in available_names.items() if k == v}  # do not import glob in favour of glob.glob
+available_modules = ({x for x in available_names.values() if x not in _module_clash}
+                     .union(("csv", "jsonpickle", "humanize", "webbrowser", "collections", "itertools")))
 
 __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it out"
            "\n"
@@ -60,7 +61,7 @@ parser.add_argument("-E", "--end", help='Any Python script, executed after proce
                                         ' Useful for final output.', metavar="COMMAND")
 parser.add_argument("-v", "--verbose", help='Show command exceptions.'
                                             ' Used twice to show automatic imports.', action='count', default=0)
-parser.add_argument("-f", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
+parser.add_argument("-F", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
                     action='store_true')
 parser.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
 parser.add_argument("-1", help='Process just first line. Useful in combination with --whole.'
@@ -69,8 +70,13 @@ parser.add_argument("-w", "--whole", help='Wait till whole text and then process
                                           ' Variable `text` is available containing whole text.', action='store_true')
 parser.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
 parser.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true')
-parser.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default since this would'
-                                    ' cause an overflow when handling an infinite input.', action='store_true')
+parser.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default'
+                                    ' due to an overflow when handling an infinite input.', action='store_true')
+parser.add_argument("-g", "--generate", help='Generate lines while ignoring the input pipe.'
+                                             ' Line will correspond to the iteration cycle count.'
+                                             ' If `NUM` not specified, 5 lines will be produced by default.'
+                                             ' Putting `NUM == 0` means an infinite generator.',
+                    nargs="?", type=int, metavar="NUM", const=5)
 
 regular = parser.add_argument_group("Regular output")
 regular.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
@@ -99,12 +105,12 @@ logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: loggi
 match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
 
 
-def write(s):
+def write(v):
     """ Print either bytes or string. Bytes are not printed in the Python b-form: b'string' but raw. """
-    if type(s) is bytes:
-        sys.stdout.buffer.write(s + b'\n')
+    if type(v) is bytes:
+        sys.stdout.buffer.write(v + b'\n')
     else:
-        print(s)
+        print(v)
 
 
 @contextmanager
@@ -217,13 +223,13 @@ def output(line, final_round=None):
             write(line)
 
 
-def get_number(s):
+def get_number(v):
     num = None
     try:
         # we prefer having int over float because adding values '5' + '5' as '10'
         # looks better than '10.0' in most use cases
-        num = float(s)
-        num = int(s)  # "10.0" -> int conversion fails and num stays float
+        num = float(v)
+        num = int(v)  # "10.0" -> int conversion fails and num stays float
     except (ValueError, TypeError):
         pass
     return num
@@ -264,7 +270,7 @@ def prepare_command(name):
 
     # check if there is only a single line with a missing assignment
     if (len(cmd.splitlines()) == 1
-            and not search("(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
+            and not search(r"(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
             # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
             and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
             and ";" not in cmd
@@ -284,7 +290,14 @@ def prepare_command(name):
 # Note: do not initialize the `text` to None. We want to be able to catch
 # `<class 'NameError'> name 'text' is not defined` while not turning `--whole` on
 text: str
-if args.whole:
+if args.generate is not None:
+    # `--generate=5` → 1,2,3,4,5
+    # `--generate=0` -> 1 .. infinity
+    # When used an infinite generator, it overflows at the end. However, I think the more common use is to profit
+    # from the line number generated than be afraid of the overflow
+    # that can be avoided by: `pz "while True: print(1)" -g1`
+    loop = (str(i) for i in (range(1, args.generate+1) if args.generate else count(1)))
+elif args.whole:
     # fetch whole text
     text = sys.stdin.read()  # XX we may stop reading text and use what we have on KeyboardInterrupt
     loop = (line for line in text.splitlines()[:args.n])
@@ -314,8 +327,11 @@ while True:
         original_line = s = next(loop).rstrip()
         n = get_number(s)
         if args.lines:
+            # it might be undefined by purpose (and user should not see it)
+            # noinspection PyUnboundLocalVariable
             lines.append(s)
             if n:
+                # noinspection PyUnboundLocalVariable
                 numbers.append(n)
     except (KeyboardInterrupt, StopIteration):
         break
@@ -339,6 +355,12 @@ while True:
                     break
                 output(s)
                 break
+    except BrokenPipeError:
+        # do not continue processing when pipe is broken
+        # ex: KeyboardInterrupt cast to a processes that pz infinite generator pipes into
+        raise
+    except KeyboardInterrupt:  # useful for ending up an infinite generator
+        break
     except Exception as e:
         logger.warning(f'Exception: {type(e)} {e} on line: {s}')
         continue
