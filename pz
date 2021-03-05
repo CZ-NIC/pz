@@ -52,12 +52,12 @@ __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it o
 
 # parse arguments
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument("command", help='Any Python script (multiple statements allowed)',
+parser.add_argument("main", help='Any Python script (multiple statements allowed)',
                     metavar="COMMAND", nargs="?")
-parser.add_argument("-s", "--setup", help='Any Python script, executed before processing.'
+parser.add_argument("-S", "--setup", help='Any Python script, executed before processing.'
                                           ' Useful for variable initializing.', metavar="COMMAND")
-parser.add_argument("--finally", help='Any Python script, executed after processing.'
-                                      ' Useful for final output.', metavar="COMMAND")
+parser.add_argument("-E", "--end", help='Any Python script, executed after processing.'
+                                        ' Useful for final output.', metavar="COMMAND")
 parser.add_argument("-v", "--verbose", help='Show command exceptions.'
                                             ' Used twice to show automatic imports.', action='count', default=0)
 parser.add_argument("-f", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
@@ -68,7 +68,7 @@ parser.add_argument("-1", help='Process just first line. Useful in combination w
 parser.add_argument("-w", "--whole", help='Wait till whole text and then process.'
                                           ' Variable `text` is available containing whole text.', action='store_true')
 parser.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
-parser.add_argument("-0", help='Skip all lines output. (Useful in combination with --finally.)', action='store_true')
+parser.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true')
 parser.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default since this would'
                                     ' cause an overflow when handling an infinite input.', action='store_true')
 
@@ -83,13 +83,13 @@ args = parser.parse_args()
 if getattr(args, "1"):
     args.n = 1
 
-if not getattr(args, "command"):
-    if getattr(args, "finally") is None:
-        logger.error("You have to specify either COMMAND or --finally COMMAND.")
+if not getattr(args, "main"):
+    if getattr(args, "end") is None:
+        logger.error("You have to specify either main COMMAND or --end COMMAND.")
         quit()
     setattr(args, "0", True)  # suppress output if no command specified
 
-if getattr(args, "finally"):
+if getattr(args, "end"):
     args.lines = True
 
 logger.setLevel({0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO, 3: logging.DEBUG}[args.verbose])
@@ -139,7 +139,7 @@ def auto_import():
                 raise
 
 
-def try_argument(callable_, argument, var, cmd="command"):
+def try_argument(callable_, argument, var, cmd="main"):
     """ Try to pass an argument to a callable. Returns False if TypeError happened. """
     t = f"attempt to use `{var}` as the callable parameter in {cmd}: {command[cmd]}({argument})"
     try:
@@ -171,7 +171,7 @@ def output(line, final_round=None):
                 output(line())
             except TypeError:
                 if tried_to_correct_callable and not final_round:
-                    # this it not the first line of command nor the `--finally` clause,
+                    # this it not the first line of the main command nor the `--end` clause,
                     # we have already been there without success
                     raise
                 tried_to_correct_callable = True
@@ -202,12 +202,12 @@ def output(line, final_round=None):
                             attempts.append((original_line.encode("utf-8"), "s.encode('utf-8')"))
                     except ValueError:  # ex: `set.add` raises no signature found
                         pass
-                else:  # we are in the `--finally` clause, original_line is empty, we use `lines` or `numbers` instead
+                else:  # we are in the `--end` clause, original_line is empty, we use `lines` or `numbers` instead
                     if len(numbers) == len(lines):
-                        # ex: echo -e "1\n2\n3\n4" | pz --finally sum
-                        attempts.append((numbers, "numbers", "finally"))
-                    # ex: echo -e "1\n2\n3\n4" | pz  --finally "' - '.join" ->  1 - 2 - 3 - 4
-                    attempts.append((lines, "lines", "finally"))
+                        # ex: echo -e "1\n2\n3\n4" | pz --end sum
+                        attempts.append((numbers, "numbers", "end"))
+                    # ex: echo -e "1\n2\n3\n4" | pz  --end "' - '.join" ->  1 - 2 - 3 - 4
+                    attempts.append((lines, "lines", "end"))
                 if not any(try_argument(line, *x) for x in attempts):
                     raise
         else:  # ex: int, str
@@ -244,7 +244,7 @@ command = {}
 regular_command = None  # prepare regular modifications
 reg_ex = None
 if args.match or args.findall or args.search or args.sub:
-    reg_ex = re.compile(args.command)
+    reg_ex = re.compile(args.main)
     if args.match:
         regular_command = reg_ex.match
     elif args.search:
@@ -258,14 +258,14 @@ if args.match or args.findall or args.search or args.sub:
 def prepare_command(name):
     command[name] = cmd = (getattr(args, name) or "").strip()
 
-    if name == "command" and regular_command:
+    if name == "main" and regular_command:
         # prepending `line = ` is not needed, the string is treated as a `match` parameter
         return
 
     # check if there is only a single line with a missing assignment
     if (len(cmd.splitlines()) == 1
             and not search("(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
-             # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
+            # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
             and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
             and ";" not in cmd
             and "lines." not in cmd):
@@ -278,7 +278,7 @@ def prepare_command(name):
         logger.debug(f"Changing the {name} clause to: {command[name]}")
 
 
-[prepare_command(name) for name in ("command", "finally")]
+[prepare_command(name) for name in ("main", "end")]
 
 # prepare text processing (either fetch whole or line by line)
 # Note: do not initialize the `text` to None. We want to be able to catch
@@ -330,11 +330,11 @@ while True:
                     try:
                         s = regular_command(s)
                     except re.error as e:
-                        logger.error(f"{e}, regular expression: {command['command']} on line: {s}")
+                        logger.error(f"{e}, regular expression: {command['main']} on line: {s}")
                         break
                 else:  # resolving custom command
                     # note that exec will not affect local field, hence we cannot easily put this in a method
-                    exec(command["command"])
+                    exec(command["main"])
                 if skip or (skip_all and skip is not False):  # user chooses to filter out the line
                     break
                 output(s)
@@ -344,13 +344,13 @@ while True:
         continue
 
 # run final script
-if command["finally"]:
+if command["end"]:
     original_line = s = n = None
     try:
         while True:
             with auto_import():
-                exec(command["finally"])
+                exec(command["end"])
                 output(s, True)
                 break
     except Exception as e:
-        logger.warning(f'Exception: {type(e)} {e} in the --finally clause')
+        logger.warning(f'Exception: {type(e)} {e} in the --end clause')

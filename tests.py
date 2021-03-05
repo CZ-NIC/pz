@@ -45,7 +45,7 @@ class TestMaster(unittest.TestCase):
         if setup:
             cmd.extend(["--setup", setup])
         if final:
-            cmd.extend(["--finally", final])
+            cmd.extend(["--end", final])
         if sub:
             cmd.extend(["--sub", sub])
 

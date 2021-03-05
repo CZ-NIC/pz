@@ -3,7 +3,7 @@
 
 Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
 
-How? Simply meddle with the `s` variable. Example: appending '.com' to every line.
+**How? Simply meddle with the `s` variable.** Example: appending '.com' to every line.
 ```bash
 $ echo -e "example\nwikipedia" | pz 's += ".com"'
 example.com
@@ -97,11 +97,11 @@ pz --findall "(https?://[^\s]+)" < file.log | pz webbrowser.open
 ```
 
 ## Sum numbers
-Replacing `| awk '{count+=$1} END{print count}'` or `| paste -sd+ | bc`. Just use `sum` in the `--finally` clause.
+Replacing `| awk '{count+=$1} END{print count}'` or `| paste -sd+ | bc`. Just use `sum` in the `--end` clause.
 
 ```bash
-# internally changed to --finally `s = sum(numbers)`
-echo -e "1\n2\n3\n4" | pz --finally sum  # 10
+# internally changed to --end `s = sum(numbers)`
+echo -e "1\n2\n3\n4" | pz --end sum  # 10
 ```
 
 ## Keep unique lines
@@ -117,9 +117,9 @@ $ echo -e "1\n2\n2\n3" | pz "skip = s in c; c.add(s)"  --setup "c=set()"
 
 However, an advantage over `| sort | uniq` comes when handling a stream. You see unique lines instantly, without waiting a stream to finish. Useful when using with `tail --follow`.
 
-Alternatively, to assure the values are sorted, we can make a use of `--finally` flag that produces the output after the processing finished.
+Alternatively, to assure the values are sorted, we can make a use of `--end` flag that produces the output after the processing finished.
 ```bash
-echo -e "1\n2\n2\n3" | pz "S.add(s)" --finally "sorted(S)"  -0
+echo -e "1\n2\n2\n3" | pz "S.add(s)" --end "sorted(S)"  -0
 ```
 
 Note that we used the variable `S` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
@@ -128,13 +128,13 @@ Note that we used the variable `S` which is initialized by default to an empty s
 
 We can omit `(s)` in the `command` clause and hence get rid of the quotes all together.
 ```bash
-echo -e "1\n2\n2\n3" | pz S.add --finally "sorted(S)"
+echo -e "1\n2\n2\n3" | pz S.add --end "sorted(S)"
 ```
 
-Nevertheless, the most straightforward approach would involve the `lines` variable, available when using the `--finally` clause.
+Nevertheless, the most straightforward approach would involve the `lines` variable, available when using the `--end` clause.
 
 ```bash
-echo -e "1\n2\n2\n3" | pz --finally "sorted(set(lines))"
+echo -e "1\n2\n2\n3" | pz --end "sorted(set(lines))"
 ``` 
 
 ## Counting words
@@ -142,12 +142,12 @@ echo -e "1\n2\n2\n3" | pz --finally "sorted(set(lines))"
 We split the line to get the words and put them in `S`, a global instance of the `set`. Then, we print the set length to get the number of unique words.
 
 ```bash
-echo -e "red green\nblue red green" | pz 'S.update(s.split())' --finally 'len(S)'  # 3
+echo -e "red green\nblue red green" | pz 'S.update(s.split())' --end 'len(S)'  # 3
 ```
 
 But what if we want to get the most common words and the count of its usages? Lets use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
 ```bash
-echo -e "red green\nblue red green" | pz 'C.update(s.split())' --finally C.most_common
+echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_common
 red, 2
 green, 2
 blue, 1
@@ -204,15 +204,15 @@ echo 5.2 | pz n+2  # 7.2
 Available only with the `--whole` flag set.  
 Ex: get character count (an alternative to `| wc -c`).
 ```
-echo -e "hello\nworld" | pz --finally 'len(text)' --whole  # 12
+echo -e "hello\nworld" | pz --end 'len(text)' --whole  # 12
 ```
 
 ### `lines` – list of lines so far processed
 Available only with the `--lines` flag set.  
 Ex: returning the last line
 ```bash
-# the `--lines` flag is automatically on when `--finally` used
-echo -e "hello\nworld" | pz --finally lines[-1]  # "world"
+# the `--lines` flag is automatically on when `--end` used
+echo -e "hello\nworld" | pz --end lines[-1]  # "world"
 ```
 
 ### `numbers` – list of numbers so far processed
@@ -239,9 +239,9 @@ Some variables are initialized and ready to be used globally. They are common fo
 
 <sub>It is true that using uppercase is not conforming the naming convention. However in these tiny scripts the readability is the chief principle, every character counts.</sub>
 
-Using a set `S`. In the example, we add every line to the set and finally print it out in a sorted manner.
+Using a set `S`. In the example, we add every line to the set and end print it out in a sorted manner.
 ```bash
-echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --finally "sorted(S)"
+echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
 1
 2
 3  
@@ -249,7 +249,7 @@ echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --finally "sorted(S)"
 
 Using a list `L`. Append lines that contains a number bigger than one and finally, print their count. As only the final count matters, suppress the line output with the flag `-0`. 
 ```bash
-echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --finally "len(L)" -0
+echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 3  
 ```
 
@@ -326,7 +326,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     echo "25" | pz sqrt | pz round  # "5"
   
     # internally changed to `s = sum(numbers)`
-    # `numbers` are available only when `--lines` or `--finally` set
+    # `numbers` are available only when `--lines` or `--end` set
     echo -e "1\n2\n3\n4" | pz sum --lines
     1
     3
@@ -334,8 +334,8 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     10
   
     # internally changed to `' - '.join(lines)`
-    # `lines` are available only when `--lines` or `--finally` set  
-    echo -e "1\n2\n3\n4" | pz  --finally "' - '.join"
+    # `lines` are available only when `--lines` or `--end` set  
+    echo -e "1\n2\n3\n4" | pz  --end "' - '.join"
     1 - 2 - 3 - 4
     ```
   
@@ -345,7 +345,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     * using its numeral representation `n` if available
     * encoded to bytes `s.encode('utf-8')`
     
-  In the `--finally` clause, we try furthermore the `lines`.  
+  In the `--end` clause, we try furthermore the `lines`.  
 
 ## CLI flags
 * `command`: Any Python script (multiple statements allowed)
@@ -357,18 +357,18 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     2: another row
     ```
     <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
-* `--finally`: Any Python script, executed after processing. Useful for final output.
+* `--end`: Any Python script, executed after processing. Useful for final output.
     Turns on the `--lines` automatically because we do not expect an infinite stream.
     ```bash
-    $ echo -e "1\n2\n3\n4" | pz --finally sum
+    $ echo -e "1\n2\n3\n4" | pz --end sum
     10
-    $ echo -e "1\n2\n3\n4" | pz s --finally sum
+    $ echo -e "1\n2\n3\n4" | pz s --end sum
     1
     2
     3
     4
     10  
-    $ echo -e "1\n2\n3\n4" | pz sum --finally sum
+    $ echo -e "1\n2\n3\n4" | pz sum --end sum
     1
     3
     6
@@ -443,7 +443,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     
     bu
     ```
-* `-0`: Skip all lines output. (Useful in combination with `--finally`.)
+* `-0`: Skip all lines output. (Useful in combination with `--end`.)
 
 ### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`
