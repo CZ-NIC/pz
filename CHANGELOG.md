@@ -7,6 +7,8 @@
 - auto-importing works in the `--setup` clause
 - will not internally change commands starting with a reserved keyword (ex: `if s ==` will not be changed to `s = if s ===`)
 - generator
+- skip processing if not needed to speed up
+- `--format` flag
 
 ## 0.9 (2020-12-02)
 - other modules added for auto-import

@@ -1,5 +1,6 @@
 # pz
 [![Build Status](https://travis-ci.org/CZ-NIC/pz.svg?branch=main)](https://travis-ci.org/CZ-NIC/pz)
+[![Downloads](https://pepy.tech/badge/pz)](https://pepy.tech/project/pz)
 
 Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
 
@@ -27,10 +28,10 @@ wikipedia.com
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
     + [`n` – current line converted to an `int` (or `float`) if possible](#n--current-line-converted-to-an-int-or-float-if-possible)
-    + [`text` – whole text, all lines together](#text--whole-text--all-lines-together)
+    + [`text` – whole text, all lines together](#text--whole-text-all-lines-together)
     + [`lines` – list of lines so far processed](#lines--list-of-lines-so-far-processed)
     + [`numbers` – list of numbers so far processed](#numbers--list-of-numbers-so-far-processed)
-    + [`skip` line](#-skip--line)
+    + [`skip` line](#skip-line)
     + [`i`, `S`, `L`, `D`, `C` – other global variables](#i-s-l-d-c--other-global-variables)
   * [Auto-import](#auto-import)
   * [Output](#output)
@@ -63,7 +64,8 @@ echo "hello world" | pz s[6:]  # hello
 We prepend the length of the line.
 
 ```bash
-tail -f /var/log/syslog | pz 'f"{len(s)}: {s}"'
+tail -f /var/log/syslog | pz 'f"{len(s)}: {s}"' 
+# or using the f-string flag: pz -f '{len(s)}: {s}' 
 ```
 
 ## Converting to uppercase
@@ -494,6 +496,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   20
   25
   ```
+* `-f`, `--format`: Main and end clauses are considered f-strings. The clause is inserted in between three-apostrophes `f'''COMMAND'''` internally.
 
 ### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`

@@ -2,6 +2,7 @@ import logging
 import sys
 import unittest
 from subprocess import Popen, PIPE, STDOUT, DEVNULL
+from time import time
 from typing import Optional
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -32,7 +33,7 @@ class TestMaster(unittest.TestCase):
     col2 = 's.split("|")[2]'
 
     def go(self, command="", piped_text=None, previous_command=None, empty=False, n=None, text=False, custom_cmd=None,
-           expect=None, debug=False, verbosity=0, quiet=False, setup=None, end=None, sub=None,
+           expect=None, debug=False, verbosity=0, quiet=False, setup=None, end=None, sub=None, format=False,
            generate: Optional[str] = None, stderr=STDOUT):
         """
 
@@ -73,6 +74,8 @@ class TestMaster(unittest.TestCase):
             cmd.extend(["--end", end])
         if sub:
             cmd.extend(["--sub", sub])
+        if format:
+            cmd.append("--format")
         if generate is not None:
             cmd.append("--generate")  # this flag might be empty as it has a default value
             if generate:
@@ -89,6 +92,10 @@ class TestMaster(unittest.TestCase):
             p = Popen(cmd, shell=True, stdout=PIPE, stderr=stderr)
             stdout = p.communicate()[0]
         elif piped_text:
+            if isinstance(piped_text, list):
+                piped_text = "\n".join(piped_text)
+            elif not isinstance(piped_text, str):
+                piped_text = str(piped_text)
             p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=stderr)
             stdout = p.communicate(input=piped_text.encode("utf-8"))[0]
         elif generate is not None:
@@ -109,8 +116,15 @@ class TestMaster(unittest.TestCase):
         return val
 
     def test_delayed_input(self):
-        # IPC -> sleep in STDIN, sleep in STDOUT XX (ex: tail -f)
-        ...
+        """ Sleep function works, must rend execution longer """
+
+        start = time()
+        self.go("sleep(1)", piped_text=1)
+        self.assertTrue(1 < (time() - start) < 2)
+
+        start = time()
+        self.go("s", piped_text=1)
+        self.assertTrue((time() - start) < 1)
 
 
 class TestFlags(TestMaster):
@@ -145,7 +159,7 @@ class TestFlags(TestMaster):
         exception_text = b"Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: 1\n"
         check(quiet=1)
         check(verbosity=0, expect_stderr=exception_text)
-        check(verbosity=1, expect_stderr=auto_import_text+ exception_text)
+        check(verbosity=1, expect_stderr=auto_import_text + exception_text)
 
     def test_debugging(self):
         """ No access to `text` variable. (Not fetched by --text, should produce an invisible exception.) """
@@ -189,6 +203,12 @@ class TestFlags(TestMaster):
         self.go("len(text)", piped_text="hello", expect=5, text=True)
         self.go("len(text)", piped_text="hello", expect=[], text=False, quiet=True)
 
+    def test_format(self):
+        """ Formatting flag influences both main clause and the end clause. """
+        self.go("{n+3} %", format=True, piped_text="5", expect="8 %")
+        self.go(end="{sum(numbers)+3} %", format=True, piped_text="5\n2", expect="10 %")
+        self.go("{n}: {factorial(n)}", format=True, generate="5", expect=["1: 1", "2: 2", "3: 6", "4: 24", "5: 120"])
+
 
 class TestVariables(TestMaster):
     # # deprecated
@@ -202,10 +222,10 @@ class TestVariables(TestMaster):
     def test_text(self):
         """ Access to the `list` variable depends on the `--text` flag. """
         # Single line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-1t", expect=["210"])
+        self.go(r"len(text)", LOREM, custom_cmd="-1t", expect=["209"])
 
         # All line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-t", expect=["210"] * 4)
+        self.go(r"len(text)", LOREM, custom_cmd="-t", expect=["209"] * 4)
 
         # No access to `text` variable. (Not fetched, should produce an invisible exception.)
         self.go(r"len(text)", LOREM, expect=[forgotten_text] + [exc_text + v for v in LOREM.splitlines()])

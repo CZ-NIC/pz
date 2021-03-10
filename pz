@@ -78,6 +78,7 @@ parser.add_argument("-g", "--generate", help='Generate lines while ignoring the 
                                              ' If `NUM` not specified, 5 lines will be produced by default.'
                                              ' Putting `NUM == 0` means an infinite generator.',
                     nargs="?", type=int, metavar="NUM", const=5)
+parser.add_argument("-f", "--format", help='Main and end clauses are considered f-strings.', action='store_true')
 
 regular = parser.add_argument_group("Regular output")
 regular.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
@@ -87,22 +88,34 @@ regular.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, s)
 
 # evaluate command line arguments
 args = parser.parse_args()
+logger.setLevel(logging.ERROR if args.quiet else (logging.DEBUG if args.verbose else logging.WARNING))
 if getattr(args, "1"):
     args.n = 1
 
-if not getattr(args, "main"):
-    if getattr(args, "end") is None:
+# determine args.run and possibly turn on args.lines and args.text
+args.run = True  # True = run whole processing, 1 = partial run, False = do not run
+if not args.main:
+    if args.end is None:
         logger.error("You have to specify either main COMMAND or --end COMMAND.")
         quit()
-    setattr(args, "0", True)  # suppress output if no command specified
 
-if getattr(args, "end"):
+    # no main clause specified -> we may limit or turn off processing
+    setattr(args, "0", True)  # suppress output
+    args.text = True  # fetch the input at once
+    args.run = False  # running can be skipped
+
+    if args.lines or any(x for x in ("numbers", "lines") if x in args.end):
+        args.run = 1  # partial run
+        args.lines = True
+
+if args.end:
+    # end clause will implicitly turn on lines
     args.lines = True
+    if not args.run:
+        args.run = 1
 
-logger.setLevel(logging.ERROR if args.quiet else (logging.DEBUG if args.verbose else logging.WARNING))
 
 # custom functions
-
 match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
 
 
@@ -148,7 +161,7 @@ def auto_import():
 
 def try_argument(callable_, argument, var, cmd="main"):
     """ Try to pass an argument to a callable. Returns False if TypeError happened. """
-    t = f"attempt to use `{var}` as the callable parameter in {cmd}: {command[cmd]}({argument})"
+    t = f"attempt to use `{var}` as the callable parameter in the {cmd} clause: {command[cmd]}({argument})"
     try:
         output(callable_(argument))
         command[cmd] += f"({var})"
@@ -236,7 +249,32 @@ def get_number(v):
     return num
 
 
-# variables available in the user scope
+def prepare_command(name):
+    c = (getattr(args, name) or "").strip()
+
+    if args.format:
+        c = "f'''" + c + "'''"
+
+    if name == "main" and regular_command:
+        # prepending `line = ` is not needed, the string is treated as a `match` parameter
+        pass
+    elif (len(c.splitlines()) == 1  # check if there is only a single line with a missing assignment
+            and not search(r"(s|skip)\s?[^=]?=[^=]", c)  # ex: `s = s+= 1` would fail
+            # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
+            and not any(c.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
+            and ";" not in c
+            and "lines." not in c):
+        # "s = 1" - will not pass
+        # "s += 1" - will not pass
+        # "s + 1" - will pass
+        # "s == 1" - will pass
+        # "if s == 1: print(s)" - will not pass
+        c = ("skip = not " if args.filter else "s = ") + c
+        logger.debug(f"Changing the {name} clause to: {c}")
+    command[name] = c
+
+
+# empty variables available in the user scope
 i = 0
 S = set()
 L = list()
@@ -260,31 +298,6 @@ if args.match or args.findall or args.search or args.sub:
         regular_command = reg_ex.findall
     elif args.sub:
         regular_command = lambda line: reg_ex.sub(args.sub, line)
-
-
-def prepare_command(name):
-    command[name] = cmd = (getattr(args, name) or "").strip()
-
-    if name == "main" and regular_command:
-        # prepending `line = ` is not needed, the string is treated as a `match` parameter
-        return
-
-    # check if there is only a single line with a missing assignment
-    if (len(cmd.splitlines()) == 1
-            and not search(r"(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
-            # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
-            and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
-            and ";" not in cmd
-            and "lines." not in cmd):
-        # "s = 1" - will not pass
-        # "s += 1" - will not pass
-        # "s + 1" - will pass
-        # "s == 1" - will pass
-        # "if s == 1: print(s)" - will not pass
-        command[name] = ("skip = not " if args.filter else "s = ") + cmd
-        logger.debug(f"Changing the {name} clause to: {command[name]}")
-
-
 [prepare_command(name) for name in ("main", "end")]
 
 # prepare text processing (either fetch whole or line by line)
@@ -307,24 +320,29 @@ else:
     # load lines one by one (while taking at most N lines)
     loop = islice(sys.stdin, args.n)
 
-# run setup
+# run the setup clause
 if args.setup:
     while True:
         with auto_import():
             exec(args.setup)
             break
 
-# run processing
-tried_to_correct_callable = False
-original_line = None
+
+# filled-in variables available in the user scope
 n = None
 lines: list
 numbers: list
+
 if args.lines:
     lines = []
     numbers = []
 
-if command["main"] or args.lines is not None:  # speed up when there is no main clause
+# internal processing variables
+tried_to_correct_callable = False
+original_line = s = None
+
+# run processing
+if args.run:  # speed up when there is no main clause
     while True:
         try:
             original_line = s = next(loop).rstrip()
@@ -338,6 +356,9 @@ if command["main"] or args.lines is not None:  # speed up when there is no main 
                     numbers.append(n)
         except (KeyboardInterrupt, StopIteration):
             break
+
+        if args.run is not True:  # speed up, further processing not needed
+            continue
 
         try:
             while True:
