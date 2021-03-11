@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.0 (unreleased)
+## 1.0.0
 - CHANGED:
     - `--end` clause renamed from `--finally`
     - `--text` renamed from `--whole`

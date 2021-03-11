@@ -8,8 +8,6 @@ import sys
 from collections import defaultdict, Counter
 from collections.abc import Iterable, Callable
 from contextlib import contextmanager
-# noinspection PyUnresolvedReferences
-from datetime import *
 from itertools import islice, count
 # noinspection PyUnresolvedReferences
 from math import *
@@ -21,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 # names that can be imported
 available_names = {"Path": "pathlib",
+                   "datetime": "datetime",
                    "sleep": "time",
+                   "time": "time",
                    "randint": "random",
                    "get": "requests",
                    "b64encode": "base64",
@@ -29,15 +29,16 @@ available_names = {"Path": "pathlib",
                    "glob": "glob",
                    "iglob": "glob",
                    "ZipFile": "zipfile"}
-_module_clash = {v for k, v in available_names.items() if k == v}  # do not import glob in favour of glob.glob
+_module_clash = {v for k, v in available_names.items() if k == v}  # ex: do not import glob in favour of glob.glob
 available_modules = ({x for x in available_names.values() if x not in _module_clash}
                      .union(("csv", "jsonpickle", "humanize", "webbrowser", "collections", "itertools")))
+
+# pz datetime.now()
 
 __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it out"
            "\n"
            "\nAvailable without import:"
-           f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...),"
-           f" defaultdict"
+           f"\n Loaded: re.* (match, search, findall), math.* (sqrt,...), defaultdict"
            f"\n Auto-imported functions: {', '.join(sorted(available_names.keys(), key=str.casefold))}"
            f"\n Auto-imported modules: {', '.join(sorted(available_modules))}"
            f"\n"

@@ -411,6 +411,16 @@ class TestUsecases(TestMaster):
     def test_random_number(self):
         self.assertTrue(0 < int(self.go(r'randint(1,10)', CSV)[0]) < 11)
 
+    def test_csv_reader(self):
+        self.go("(x[1] for x in csv.reader([s]))", piped_text='"one","two, still two",three', expect="two, still two")
+
+    def test_multiline_statement(self):
+        self.go('''if n > 2:
+  s = 'bigger'
+else:
+  s = 'smaller'
+''', piped_text="1\n2\n3", expect=["smaller", "smaller", "bigger"])
+
 
 if __name__ == '__main__':
     unittest.main()

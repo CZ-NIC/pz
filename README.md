@@ -218,6 +218,88 @@ pz factorial -g5
 120
 ```
 
+## Read CSV
+
+As `csv` is one of the auto-imported libraries, we may directly access instantiate the reader object. In the following example, we output the second element of every line either progressively or at once when processing finished. 
+
+```bash
+# output line by line
+echo '"a","b1,b2,b3","c"' | pz "(x[1] for x in csv.reader([s]))"  # "b1,b2,b3"
+
+# output at the end
+echo '"a","b1,b2,b3","c"' | pz --end "(x[1] for x in csv.reader(lines))"  # "b1,b2,b3"   
+````
+
+## Generate random number
+
+First, take a look how to stream random numbers to 100 in the bash.
+
+```bash
+while :; do echo $((1+$RANDOM%100)); done
+```
+
+Now examine pure Python solution, without having `pz` involved.
+
+```bash
+python3 -c "while True: from random import randint; print(randint(1,100))"
+```
+
+Using `pz`, we relieve the cycle handling and importing burden from the command.
+
+```bash
+pz "randint(1,100)" --generate=0
+```
+
+Let's generate few random strings of variable length 1 to 30. When generator flag is used without number, it cycles five times.
+```bash
+pz "''.join(random.choice(string.ascii_letters) for _ in range(randint(1,30)))" -S "import string" -g
+``` 
+
+## Average a stream value
+
+Let's have a stream and output the average value.
+
+```bash
+# print out current line `i` and current average `sum/i`
+while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'i+=1;sum+=n;s=i, sum/i' --setup "sum=0"
+1, 38.0
+2, 67.0
+3, 62.0
+4, 49.75
+
+# print out every 10 000 lines
+# (thanks to `not i % 10000` expression) 
+while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'i+=1;sum+=n;s=sum/i; s = (i,s) if not i % 10000 else ""' --setup "sum=0"
+10000, 50.9058
+20000, 50.7344
+30000, 50.693466666666666
+40000, 50.5904
+```
+
+How can this be simplified? Let's use an infinite generator `-g0`. As we know, `n` is given current line number by the generator and `i` is by default implicitly declared to `i=0` so we use it to hold the sum. No setup clause needed. No bash cycle needed. 
+```bash
+pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
+10000, 49.9488
+20000, 50.5399
+30000, 50.39906666666667
+40000, 50.494425
+```
+
+## Multiline statements
+
+Should you need to evaluate a short multiline statement, use standard multiline statements, supported by bash.
+
+```bash
+echo -e "1\n2\n3" | pz "if n > 2:
+  s = 'bigger'
+else:
+  s = 'smaller'
+"
+smaller
+bigger
+bigger
+```
+
 # Docs
 
 ## Scope variables
@@ -292,9 +374,9 @@ echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 ## Auto-import
 
 * You can always import libraries you need manually. (Put `import` statement into the command.)
-* Some libraries are ready to be used: `re.* (match, search, findall), math.* (sqrt,...), datetime.* (datetime.now, ...), defaultdict`
+* Some libraries are ready to be used: `re.* (match, search, findall), math.* (sqrt,...), defaultdict`
 * Some others are auto-imported whenever its use has been detected. In such case, the line is reprocessed.
-    * Functions: `b64decode, b64encode, (requests).get, glob, iglob, Path, randint, sleep, ZipFile`
+    * Functions: `b64decode, b64encode, datetime, (requests).get, glob, iglob, Path, randint, sleep, time, ZipFile`
     * Modules: `base64, collections, csv, humanize, itertools, jsonpickle, pathlib, random, requests, time, webbrowser, zipfile`
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
