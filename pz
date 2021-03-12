@@ -54,38 +54,45 @@ __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it o
 
 # parse arguments
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument("main", help='Any Python script (multiple statements allowed)',
-                    metavar="COMMAND", nargs="?")
-parser.add_argument("-S", "--setup", help='Any Python script, executed before processing.'
-                                          ' Useful for variable initializing.', metavar="COMMAND")
-parser.add_argument("-E", "--end", help='Any Python script, executed after processing.'
-                                        ' Useful for final output.', metavar="COMMAND")
 parser.add_argument("-v", "--verbose", help='Show automatic imports and internal command modification',
                     action="store_true")
 parser.add_argument("-q", "--quiet", help='Suppress command exceptions', action='store_true')
-parser.add_argument("-F", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
-                    action='store_true')
-parser.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
-parser.add_argument("-1", help='Process just first line. Useful in combination with --text.'
-                               ' You may want to add -1 flag.', action='store_true')
-parser.add_argument("-t", "--text", help='Wait till whole text and then process.'
-                                         ' Variable `text` is available containing whole text.', action='store_true')
-parser.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
-parser.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true')
-parser.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default'
-                                    ' due to an overflow when handling an infinite input.', action='store_true')
-parser.add_argument("-g", "--generate", help='Generate lines while ignoring the input pipe.'
-                                             ' Line will correspond to the iteration cycle count.'
-                                             ' If `NUM` not specified, 5 lines will be produced by default.'
-                                             ' Putting `NUM == 0` means an infinite generator.',
-                    nargs="?", type=int, metavar="NUM", const=5)
-parser.add_argument("-f", "--format", help='Main and end clauses are considered f-strings.', action='store_true')
 
-regular = parser.add_argument_group("Regular output")
-regular.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
-regular.add_argument("--match", help='Equivalent to `match(COMMAND, s)`', action='store_true')
-regular.add_argument("--findall", help='Equivalent to `findall(COMMAND, s)`', action='store_true')
-regular.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, s)`', metavar="SUBSTITUTION")
+group1 = parser.add_argument_group("Command clauses")
+group1.add_argument("main", help='Any Python script executed on every line (multiple statements allowed)',
+                    metavar="COMMAND", nargs="?")
+group1.add_argument("-S", "--setup", help='Any Python script, executed before processing.'
+                                          ' Useful for variable initializing.', metavar="COMMAND")
+group1.add_argument("-E", "--end", help='Any Python script, executed after processing.'
+                                        ' Useful for final output.', metavar="COMMAND")
+group1.add_argument("-F", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
+                    action='store_true')
+group1.add_argument("-f", "--format", help='Main and end clauses are considered f-strings.', action='store_true')
+
+group2 = parser.add_argument_group("Populating variables")
+group2.add_argument("-t", "--text", help='Wait till whole text and then process.'
+                                         ' Variable `text` is available containing whole text.', action='store_true')
+group2.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default'
+                                    ' due to an overflow when handling an infinite input.', action='store_true')
+
+group3 = parser.add_argument_group("Input / output")
+group3.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
+group3.add_argument("-1", help='Process just first line. Useful in combination with --text.'
+                               ' You may want to add -1 flag.', action='store_true')
+group3.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true')
+group3.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
+group3.add_argument("-g", "--generate", help='Generate lines while ignoring the input pipe.'
+                                             ' Line will correspond to the iteration cycle count.'
+                                             ' By default `NUM=5`; `NUM=0` means infinity.',
+                    nargs="?", type=int, metavar="NUM", const=5)
+group3.add_argument("--stderr", help='Print commands output to the STDERR,'
+                                     ' while letting the original line piped to STDOUT intact.', action='store_true')
+
+group4 = parser.add_argument_group("Regular output")
+group4.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
+group4.add_argument("--match", help='Equivalent to `match(COMMAND, s)`', action='store_true')
+group4.add_argument("--findall", help='Equivalent to `findall(COMMAND, s)`', action='store_true')
+group4.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, s)`', metavar="SUBSTITUTION")
 
 # evaluate command line arguments
 args = parser.parse_args()
@@ -105,27 +112,23 @@ if not args.main:
     args.text = True  # fetch the input at once
     args.run = False  # running can be skipped
 
-    if args.lines or any(x for x in ("numbers", "lines") if x in args.end):
-        args.run = 1  # partial run
-        args.lines = True
-
 if args.end:
     # end clause will implicitly turn on lines
     args.lines = True
     if not args.run:
-        args.run = 1
-
+        args.run = 1  # at least partial run to fill `lines`
 
 # custom functions
 match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
+write_pipe = sys.stderr if args.stderr else sys.stdout
 
 
 def write(v):
     """ Print either bytes or string. Bytes are not printed in the Python b-form: b'string' but raw. """
     if type(v) is bytes:
-        sys.stdout.buffer.write(v + b'\n')
+        write_pipe.buffer.write(v + b'\n')
     else:
-        print(v)
+        print(v, file=write_pipe)
 
 
 @contextmanager
@@ -251,7 +254,7 @@ def get_number(v):
 
 
 def prepare_command(name):
-    c = (getattr(args, name) or "").strip()
+    original = c = (getattr(args, name) or "").strip()
 
     if args.format:
         c = "f'''" + c + "'''"
@@ -260,17 +263,23 @@ def prepare_command(name):
         # prepending `line = ` is not needed, the string is treated as a `match` parameter
         pass
     elif (len(c.splitlines()) == 1  # check if there is only a single line with a missing assignment
-            and not search(r"(s|skip)\s?[^=]?=[^=]", c)  # ex: `s = s+= 1` would fail
-            # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
-            and not any(c.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
-            and ";" not in c
-            and "lines." not in c):
+          and not search(r"(s|skip)\s?[^=]?=[^=]", c)  # ex: `s = s+= 1` would fail
+          # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
+          and not any(c.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
+          and ";" not in c
+          and "lines." not in c):
         # "s = 1" - will not pass
         # "s += 1" - will not pass
         # "s + 1" - will pass
         # "s == 1" - will pass
         # "if s == 1: print(s)" - will not pass
         c = ("skip = not " if args.filter else "s = ") + c
+
+    # when using the --stderr flag, we pass the original content to the STDOUT
+    if name == "main" and args.stderr:
+        c += ';sys.stdout.write(original_line+"\\n")'
+
+    if original != c:  # verbose output
         logger.debug(f"Changing the {name} clause to: {c}")
     command[name] = c
 
@@ -327,7 +336,6 @@ if args.setup:
         with auto_import():
             exec(args.setup)
             break
-
 
 # filled-in variables available in the user scope
 n = None

@@ -24,6 +24,11 @@ wikipedia.com
   * [Fetching web content](#fetching-web-content)
   * [Handling nested quotes](#handling-nested-quotes)
   * [Computing factorial](#computing-factorial)
+  * [Read CSV](#read-csv)
+  * [Generate random number](#generate-random-number)
+  * [Average a stream value](#average-a-stream-value)
+  * [Multiline statements](#multiline-statements)
+  * [Simple progress bar](#simple-progress-bar)
 - [Docs](#docs)
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
@@ -36,6 +41,9 @@ wikipedia.com
   * [Auto-import](#auto-import)
   * [Output](#output)
   * [CLI flags](#cli-flags)
+    + [Command clauses](#command-clauses)
+    + [Populating variables](#populating-variables)
+    + [Input / output](#input-output)
     + [Regular expressions shortcuts](#regular-expressions-shortcuts)
 
 # Installation
@@ -300,6 +308,16 @@ bigger
 bigger
 ```
 
+## Simple progress bar
+
+Simulate a lengthy processing by generating a long sequence of numbers (as they are not needed, we throw them away by `1>/dev/null`).
+On every 100th line, we move cursor up (`\033[1A`), clear line (`\033[K`) and print to `STDERR` current status.  
+
+```bash
+seq 1 100000 | pz 'i+=1; s = f"\033[1A\033[K ... {i} ..." if i % 100 == 0 else None ' --stderr 1>/dev/null
+ ... 100 ...  # replaced by ... 200 ...
+```
+
 # Docs
 
 ## Scope variables
@@ -466,8 +484,22 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   In the `--end` clause, we try furthermore the `lines`.  
 
 ## CLI flags
-* `command`: Any Python script (multiple statements allowed)
-* `-S`, `--setup`: Any Python script, executed before processing. Useful for variable initializing.
+
+* `-v`, `--verbose`: See what happens under the hood. Show automatic imports and internal command modification (attempts to make it callable and prepending `s =` if omitted).  
+    ```bash
+    $ echo -e "hello" | pz 'invalid command'
+    Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: hello
+    $ echo -e "hello" | pz 'sleep(1)' --verbose
+    Importing sleep from time
+    ```
+* `-q`, `--quiet`: See errors and values only. Suppress command exceptions.
+  ```bash
+  $ echo -e "hello" | pz 'invalid command' --quiet # empty result
+  ```
+  
+### Command clauses
+* `COMMAND`: The main clause, any Python script executed on every line (multiple statements allowed)
+* `-S COMMAND`, `--setup COMMAND`: Any Python script, executed before processing. Useful for variable initializing.
     Ex: prepend line numbers by incrementing a variable `count`.
     ```bash
     $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
@@ -475,7 +507,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     2: another row
     ```
     <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
-* `-E`, `--end`: Any Python script, executed after processing. Useful for final output.
+* `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for final output.
     Turns on the `--lines` automatically because we do not expect an infinite stream.
     ```bash
     $ echo -e "1\n2\n3\n4" | pz --end sum
@@ -493,18 +525,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     10
     10
     ```
-* `--verbose`: See what happens under the hood. Show automatic imports and internal command modification (attempts to make it callable and prepending `s =` if omitted).  
-    ```bash
-    $ echo -e "hello" | pz 'invalid command'
-    Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: hello
-    $ echo -e "hello" | pz 'sleep(1)' --verbose
-    Importing sleep from time
-    ```
-* `-q`, `--quiet`: See errors and values only. Suppress command exceptions.
-  ```bash
-  $ echo -e "hello" | pz 'invalid command' --quiet # empty result
-  ```
-* `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
+* `-F`, `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
     ```bash
     $ echo -e "1\n2\n3\n4\n5" | pz "n > 3"  --filter
@@ -523,8 +544,9 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     True
     True
     ```
-* `n`: Process only such number of lines. Roughly equivalent to `head -n`.
-* `-1`: Process just the first line. Useful in combination with `--text`.
+* `-f`, `--format`: Main and end clauses are considered f-strings. The clause is inserted in between three-apostrophes `f'''COMMAND'''` internally.
+  
+### Populating variables
 * `t`, `--text`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
     ```bash
     $ echo -e "1\n2\n3" | pz 'len(text)' 
@@ -552,6 +574,11 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     6
     10      
     ```
+
+### Input / output  
+* `n NUM`: Process only such number of lines. Roughly equivalent to `head -n`.
+* `-1`: Process just the first line. Useful in combination with `--text`.
+* `-0`: Skip all lines output. (Useful in combination with `--end`.)
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
     ```bash
@@ -564,7 +591,6 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     
     bu
     ```
-* `-0`: Skip all lines output. (Useful in combination with `--end`.)
 * `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count. If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. 
   ```bash
   $ pz n -g2
@@ -578,7 +604,37 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   20
   25
   ```
-* `-f`, `--format`: Main and end clauses are considered f-strings. The clause is inserted in between three-apostrophes `f'''COMMAND'''` internally.
+* `--stderr` Print commands output to the STDERR, while letting the original line piped to STDOUT intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make STDERR to receive a message. 
+  ```bash
+  pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr 
+  1
+  2
+  3
+  Processed next few lines
+  4
+  5
+  6
+  Processed next few lines
+  7
+  8
+  9
+  Processed next few lines
+  ```
+  
+  Demonstrate different pipes by writing STDOUT to a file and leaving STDERR in the terminal. 
+
+  ```bash
+  pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr > /tmp/example
+  Processed next few lines
+  Processed next few lines
+  Processed next few lines
+  
+  cat /tmp/example
+  1
+  2
+  3
+  ...  
+  ```
 
 ### Regular expressions shortcuts
 * `--search`: Equivalent to `search(COMMAND, s)`

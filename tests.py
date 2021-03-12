@@ -133,8 +133,12 @@ class TestFlags(TestMaster):
         self.assertEqual(3, len(self.go(self.col2, CSV, n=3)))
 
     def test_import(self):
-        # timedelta should be already present due to `from datetime import *`
-        self.go(r's+=str(timedelta(seconds=5))', previous_command="echo '123'", custom_cmd="-vv",
+        # log should be already present due to `from math import *`
+        self.go('log(n)', previous_command="echo '1000'", expect='6.907755278982137')
+
+        # timedelta should be importable in the setup
+        self.go(r's+=str(timedelta(seconds=5))', piped_text="123", custom_cmd="-vv",
+                setup="from datetime import timedelta",
                 expect="1230:00:05")
 
         # when verbosity increased, we should get notified when an import happened
@@ -208,6 +212,14 @@ class TestFlags(TestMaster):
         self.go("{n+3} %", format=True, piped_text="5", expect="8 %")
         self.go(end="{sum(numbers)+3} %", format=True, piped_text="5\n2", expect="10 %")
         self.go("{n}: {factorial(n)}", format=True, generate="5", expect=["1: 1", "2: 2", "3: 6", "4: 24", "5: 120"])
+
+    def test_stderr(self):
+        """ When using --stderr flag, the contents piped to STDOUT must stay intact. """
+        def _test(cmd):
+            return Popen(["./pz", "--end", "'end'"] + cmd, stdout=PIPE, stdin=PIPE, stderr=PIPE).communicate(b"1")
+        self.assertEqual((b'1\nend\n', b''), _test(["s"]))
+        self.assertEqual((b'1\n', b'1\nend\n'), _test(["s", "--stderr"]))
+        self.assertEqual((b'1\n', b'3\nend\n'), _test(["n+2", "--stderr"]))
 
 
 class TestVariables(TestMaster):
