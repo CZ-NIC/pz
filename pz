@@ -33,8 +33,6 @@ _module_clash = {v for k, v in available_names.items() if k == v}  # ex: do not 
 available_modules = ({x for x in available_names.values() if x not in _module_clash}
                      .union(("csv", "jsonpickle", "humanize", "webbrowser", "collections", "itertools")))
 
-# pz datetime.now()
-
 __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it out"
            "\n"
            "\nAvailable without import:"
@@ -70,16 +68,15 @@ group1.add_argument("-F", "--filter", help='Line is piped out unchanged, however
 group1.add_argument("-f", "--format", help='Main and end clauses are considered f-strings.', action='store_true')
 
 group2 = parser.add_argument_group("Populating variables")
-group2.add_argument("-t", "--text", help='Wait till whole text and then process.'
-                                         ' Variable `text` is available containing whole text.', action='store_true')
-group2.add_argument("--lines", help='Populate `lines` and `numbers` with lines. This is off by default'
-                                    ' due to an overflow when handling an infinite input.', action='store_true')
+group2.add_argument("-w", "--whole", help='Wait till whole text fetched and then process.'
+                                          ' Variable `text` is available containing whole text.', action='store_true')
 
 group3 = parser.add_argument_group("Input / output")
 group3.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
 group3.add_argument("-1", help='Process just first line. Useful in combination with --text.'
-                               ' You may want to add -1 flag.', action='store_true')
-group3.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true')
+                               ' You may want to add -1 flag.', action='store_const', dest="n", const=1)
+group3.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true',
+                    dest="zero")
 group3.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
 group3.add_argument("-g", "--generate", help='Generate lines while ignoring the input pipe.'
                                              ' Line will correspond to the iteration cycle count.'
@@ -87,6 +84,8 @@ group3.add_argument("-g", "--generate", help='Generate lines while ignoring the 
                     nargs="?", type=int, metavar="NUM", const=5)
 group3.add_argument("--stderr", help='Print commands output to the STDERR,'
                                      ' while letting the original line piped to STDOUT intact.', action='store_true')
+group3.add_argument("--overflow-safe", help='Prevent `lines`, `numbers`, `text` variables to be available.'
+                                            ' Useful when handling an infinite input.', action='store_true')
 
 group4 = parser.add_argument_group("Regular output")
 group4.add_argument("--search", help='Equivalent to `search(COMMAND, s)`', action='store_true')
@@ -97,30 +96,12 @@ group4.add_argument("--sub", help='Equivalent to `sub(COMMAND, SUBSTITUTION, s)`
 # evaluate command line arguments
 args = parser.parse_args()
 logger.setLevel(logging.ERROR if args.quiet else (logging.DEBUG if args.verbose else logging.WARNING))
-if getattr(args, "1"):
-    args.n = 1
-
-# determine args.run and possibly turn on args.lines and args.text
-args.run = True  # True = run whole processing, 1 = partial run, False = do not run
-if not args.main:
-    if args.end is None:
-        logger.error("You have to specify either main COMMAND or --end COMMAND.")
-        quit()
-
-    # no main clause specified -> we may limit or turn off processing
-    setattr(args, "0", True)  # suppress output
-    args.text = True  # fetch the input at once
-    args.run = False  # running can be skipped
-
-if args.end:
-    # end clause will implicitly turn on lines
-    args.lines = True
-    if not args.run:
-        args.run = 1  # at least partial run to fill `lines`
+write_pipe = sys.stderr if args.stderr else sys.stdout
+skip_all = args.zero
 
 # custom functions
+whole_hint_printed = False
 match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
-write_pipe = sys.stderr if args.stderr else sys.stdout
 
 
 def write(v):
@@ -143,12 +124,12 @@ def auto_import():
             # Import anything on the fly (saved performance when loaded)
             if name == "text":
                 if not whole_hint_printed:
-                    logger.warning("Did you not forget to use --text to access `text`?")
+                    logger.warning("Did you not forget to use --whole to access `text`?")
                     whole_hint_printed = True
                 raise
             elif name in ("numbers", "lines"):
-                if not whole_hint_printed:
-                    logger.warning("Did you not forget to use --lines to access `lines` and `numbers`?")
+                if not whole_hint_printed and args.overflow_safe:
+                    logger.warning("The flag --overflow-safe suppress `lines` and `numbers`.")
                     whole_hint_printed = True
                 raise
             elif name in available_names:
@@ -254,52 +235,46 @@ def get_number(v):
 
 
 def prepare_command(name):
-    original = c = (getattr(args, name) or "").strip()
+    original = cmd = (getattr(args, name) or "").strip()  # read from args.main, args.end
 
     if args.format:
-        c = "f'''" + c + "'''"
+        cmd = "f'''" + cmd + "'''"
 
     if name == "main" and regular_command:
         # prepending `line = ` is not needed, the string is treated as a `match` parameter
         pass
-    elif (len(c.splitlines()) == 1  # check if there is only a single line with a missing assignment
-          and not search(r"(s|skip)\s?[^=]?=[^=]", c)  # ex: `s = s+= 1` would fail
+    elif (len(cmd.splitlines()) == 1  # check if there is only a single line with a missing assignment
+          and not search(r"(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
           # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
-          and not any(c.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
-          and ";" not in c
-          and "lines." not in c):
+          and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
+          and ";" not in cmd
+          and "lines." not in cmd):
         # "s = 1" - will not pass
         # "s += 1" - will not pass
         # "s + 1" - will pass
         # "s == 1" - will pass
         # "if s == 1: print(s)" - will not pass
-        c = ("skip = not " if args.filter else "s = ") + c
+        cmd = ("skip = not " if args.filter else "s = ") + cmd
 
     # when using the --stderr flag, we pass the original content to the STDOUT
-    if name == "main" and args.stderr:
-        c += ';sys.stdout.write(original_line+"\\n")'
+    if name == "main" and args.stderr and not args.zero:
+        cmd += '\nsys.stdout.write(original_line+"\\n")'
 
-    if original != c:  # verbose output
-        logger.debug(f"Changing the {name} clause to: {c}")
-    command[name] = c
+    if original != cmd:  # verbose output
+        logger.debug(f"Changing the {name} clause to: {cmd}")
+    command[name] = cmd
 
-
-# empty variables available in the user scope
-i = 0
-S = set()
-L = list()
-D = dict()
-C = Counter()
-skip = None  # if user sets to False, the line will not be output
-skip_all = getattr(args, "0")
-whole_hint_printed = False
 
 # prepare commands (prepend `line =` if needed)
-command = {}
+command = {"main": "", "end": ""}
 regular_command = None  # prepare regular modifications
 reg_ex = None
 if args.match or args.findall or args.search or args.sub:
-    reg_ex = re.compile(args.main)
+    try:
+        reg_ex = re.compile(args.main)
+    except re.error as e:
+        logger.error(f"re.error: Compilation failed with {e}")
+        quit()
     if args.match:
         regular_command = reg_ex.match
     elif args.search:
@@ -308,7 +283,31 @@ if args.match or args.findall or args.search or args.sub:
         regular_command = reg_ex.findall
     elif args.sub:
         regular_command = lambda line: reg_ex.sub(args.sub, line)
-[prepare_command(name) for name in ("main", "end")]
+[prepare_command(name) for name in command]
+
+
+# determine args.run and possibly turn on args.lines and args.text
+args.run = True  # True = run whole processing, 1 = partial run, False = do not run
+args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
+
+if not command["main"]:
+    if command["end"] is None:
+        logger.error("You have to specify either main COMMAND or --end COMMAND.")
+        quit()
+
+    # no main clause specified -> we may limit or turn off processing
+    # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
+    # running can be skipped or at least run partially to fill `lines`
+    args.run = False if args.overflow_safe else 1
+
+# empty variables available in the user scope
+i = 0
+S = set()
+L = list()
+D = dict()
+C = Counter()
+skip = None  # if user sets to False, the line will not be output
+
 
 # prepare text processing (either fetch whole or line by line)
 # Note: do not initialize the `text` to None. We want to be able to catch
@@ -321,14 +320,33 @@ if args.generate is not None:
     # from the line number generated than be afraid of the overflow
     # that can be avoided by: `pz "while True: print(1)" -g1`
     loop = (str(i) for i in (range(1, args.generate + 1) if args.generate else count(1)))
-elif args.text:
+elif args.whole:
     # fetch whole text
-    text = sys.stdin.read().rstrip()  # we strip the last newline
-    # XX we may stop reading text and use what we have on KeyboardInterrupt
+    try:
+        text = sys.stdin.read().rstrip()  # we strip the last newline
+    except KeyboardInterrupt:
+        logger.error("KeyboardInterrupt: Loading `text` interrupted.")
+        text = ""
     loop = (line for line in text.splitlines()[:args.n])
 else:
     # load lines one by one (while taking at most N lines)
     loop = islice(sys.stdin, args.n)
+
+
+# filled-in variables available in the user scope
+n = None
+lines: list
+numbers: list
+counter: int  # XX decide the name, docs and test
+
+if args.lines:
+    lines = []
+    numbers = []
+    counter = 0
+
+# internal processing variables
+tried_to_correct_callable = False
+original_line = s = None
 
 # run the setup clause
 if args.setup:
@@ -337,39 +355,28 @@ if args.setup:
             exec(args.setup)
             break
 
-# filled-in variables available in the user scope
-n = None
-lines: list
-numbers: list
-
-if args.lines:
-    lines = []
-    numbers = []
-
-# internal processing variables
-tried_to_correct_callable = False
-original_line = s = None
-
 # run processing
 if args.run:  # speed up when there is no main clause
     while True:
         try:
-            original_line = s = next(loop).rstrip()
+            try:
+                original_line = s = next(loop).rstrip()
+            except StopIteration:
+                break
             n = get_number(s)
             if args.lines:
-                # it might be undefined by purpose (and user should not see it)
+                # these variables might be undefined by purpose (and user should not see it)
+                # noinspection PyUnboundLocalVariable
+                counter += 1
                 # noinspection PyUnboundLocalVariable
                 lines.append(s)
                 if n:
                     # noinspection PyUnboundLocalVariable
                     numbers.append(n)
-        except (KeyboardInterrupt, StopIteration):
-            break
 
-        if args.run is not True:  # speed up, further processing not needed
-            continue
+            if args.run is not True:  # speed up, further processing not needed
+                continue
 
-        try:
             while True:
                 with auto_import():
                     # loop until all on the fly imports are done
@@ -379,7 +386,7 @@ if args.run:  # speed up when there is no main clause
                         try:
                             s = regular_command(s)
                         except re.error as e:
-                            logger.error(f"{e}, regular expression: {command['main']} on line: {s}")
+                            logger.error(f"{e}, regular expression: {args.main} on line: {s}")
                             break
                     else:  # resolving custom command
                         # note that exec will not affect local field, hence we cannot easily put this in a method
@@ -390,17 +397,23 @@ if args.run:  # speed up when there is no main clause
                     break
         except BrokenPipeError:
             # do not continue processing when pipe is broken
-            # ex: KeyboardInterrupt cast to a processes that pz infinite generator pipes into
-            raise
+            # ex: process we pipe into is killed
+            # There is a chance we want to pipe something to the STDERR in the --end clause, hence we do not quit.
+            s = args.main if regular_command else command['main']
+            logger.error(f"BrokenPipeError: No output pipe when processing the main clause '{s}'")
+            break
         except KeyboardInterrupt:  # useful for ending up an infinite generator
+            # Break but continue when SIGINT caught in case we have an END clause.
+            # No problem when output to the terminal or to the STDERR. If output to another process via STDOUT,
+            # since whole process group received SIGINT, the output is lost if the process might is stopping right now,
+            # or BrokenPipeError is raised if the process has already stopped.
             break
         except Exception as e:
             logger.warning(f'Exception: {type(e)} {e} on line: {s}')
             continue
-
 # run final script
 if command["end"]:
-    if not args.text and args.lines:
+    if not args.whole and args.lines:
         # --text was off by default so we did not wait whole input to be piped in before processing.
         # The variable `text` was not available before but there is no obstacle in letting it
         # to be automatically available at the end – we have everything needed in the `lines` variable.
@@ -413,5 +426,19 @@ if command["end"]:
                 exec(command["end"])
                 output(s, True)
                 break
+    except BrokenPipeError:
+        logger.error(f"BrokenPipeError: No output pipe in the --end clause '{command['end']}'")
     except Exception as e:
         logger.warning(f'Exception: {type(e)} {e} in the --end clause')
+
+# Gratuitous exit
+# Ex: The middle command in `pz -g0 s | pz -E "sleep(1)" s | xargs echo` would often end up with
+#   Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
+#   BrokenPipeError: [Errno 32] Broken pipe
+# because `xargs` having received a SIGINT has already stopped.
+# We prevent this situation by manually closing the STDOUT.
+for close in (sys.stdout.flush, sys.stdout.close):
+    try:
+        close()
+    except BrokenPipeError:
+        pass

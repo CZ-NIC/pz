@@ -25,7 +25,7 @@ adipiscing elit http://nic.cz http://example.com
 sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 """
 
-forgotten_text = "Did you not forget to use --text to access `text`?"
+forgotten_text = "Did you not forget to use --whole to access `text`?"
 exc_text = "Exception: <class 'NameError'> name 'text' is not defined on line: "
 
 
@@ -61,7 +61,7 @@ class TestMaster(unittest.TestCase):
         if n:
             cmd.extend(("-n", str(n)))
         if text:
-            cmd.append("--text")
+            cmd.append("--whole")
         if custom_cmd:
             cmd.append(custom_cmd)
         if verbosity:
@@ -200,7 +200,7 @@ class TestFlags(TestMaster):
         self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
 
     def test_text(self):
-        """ The `text` variable is available during processing only when the flag `--text`
+        """ The `text` variable is available during processing only when the flag `--whole`
          is on or always in the `end` clause. """
         self.go(end="len(text)", piped_text="hello", expect=5, text=False)
         self.go(end="len(text)", piped_text="hello", expect=5, text=True)
@@ -232,12 +232,12 @@ class TestVariables(TestMaster):
     #                          self.go(r"lines.extend(search(r'(https?://[^\s]+)', line).groups())", LOREM))
 
     def test_text(self):
-        """ Access to the `list` variable depends on the `--text` flag. """
+        """ Access to the `text` variable in the main clause depends on the `--whole` flag. """
         # Single line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-1t", expect=["209"])
+        self.go(r"len(text)", LOREM, custom_cmd="-1w", expect=["209"])
 
         # All line processed. Access to `text` variable.
-        self.go(r"len(text)", LOREM, custom_cmd="-t", expect=["209"] * 4)
+        self.go(r"len(text)", LOREM, custom_cmd="-w", expect=["209"] * 4)
 
         # No access to `text` variable. (Not fetched, should produce an invisible exception.)
         self.go(r"len(text)", LOREM, expect=[forgotten_text] + [exc_text + v for v in LOREM.splitlines()])
@@ -325,13 +325,9 @@ class TestReturnValues(TestMaster):
         # modified float `n` to `sqrt(n)`
         self.go("round", "5.0", expect=5)
 
-        # since --lines is off, we sum the bytes
-        # This is counter-intuitive but I do not want to allow --lines by default
-        # since it overflows while processing an infinite input stream.
-        # XX self.go("sum", num, expect=["49", "50", "51", "52"])
-        self.go("sum", num, expect=[], quiet=True)  # missing --lines
+        self.go("sum", num, expect=[], quiet=True, custom_cmd="--overflow-safe")
 
-        self.go("sum", num, expect=["1", "3", "6", "10"], custom_cmd="--lines")
+        self.go("sum", num, expect=["1", "3", "6", "10"])
 
         self.go("", num, end="sum", expect="10")
         self.go("sum", num, end="sum", expect=["1", "3", "6", "10", "10"])

@@ -1,13 +1,12 @@
 # CHANGELOG
 
 ## 1.0.0
-- CHANGED:
-    - `--end` clause renamed from `--finally`
-    - `--text` renamed from `--whole`
+- CHANGED: `--end` clause renamed from `--finally`
 - auto-importing works in the `--setup` clause
 - will not internally change commands starting with a reserved keyword (ex: `if s ==` will not be changed to `s = if s ===`)
 - generator
 - skip processing if not needed to speed up
+- command chaining tuned up
 - `--format`, `--stderr` flags
 
 ## 0.9 (2020-12-02)

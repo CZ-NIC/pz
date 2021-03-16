@@ -42,8 +42,7 @@ wikipedia.com
   * [Output](#output)
   * [CLI flags](#cli-flags)
     + [Command clauses](#command-clauses)
-    + [Populating variables](#populating-variables)
-    + [Input / output](#input-output)
+    + [Input / output](#input--output)
     + [Regular expressions shortcuts](#regular-expressions-shortcuts)
 
 # Installation
@@ -337,25 +336,24 @@ echo 5.2 | pz n+2  # 7.2
 ```
 
 ### `text` – whole text, all lines together
-Available only with the `--text` flag set or in the `--end` clause.  
+Not available with the `--overflow-safe` flag set nor in the `main` clause unless the `--whole` flag set.
 Ex: get character count (an alternative to `| wc -c`).
 ```
-echo -e "hello\nworld" | pz --end 'len(text)' --text  # 12
+echo -e "hello\nworld" | pz --end 'len(text)' # 11
 ```
 
 ### `lines` – list of lines so far processed
-Available only with the `--lines` flag set.  
+Not available with the `--overflow-safe` flag set.  
 Ex: returning the last line
 ```bash
-# the `--lines` flag is automatically on when `--end` used
 echo -e "hello\nworld" | pz --end lines[-1]  # "world"
 ```
 
 ### `numbers` – list of numbers so far processed
-Available only with the `--lines` flag set.  
-Ex: show current average of the stream. More specifically, we print out tuples: `line count, current line, average`.
+Not available with the `--overflow-safe` flag set.  
+Ex: show current average of the stream. More specifically, we output tuples: `line count, current line, average`.
 ```bash
-$ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i' --lines
+$ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i'
 1, 20, 20.0
 2, 40, 30.0
 3, 25, 28.333333333333332
@@ -461,16 +459,14 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     # and then to `s = round(n)`
     echo "25" | pz sqrt | pz round  # "5"
   
-    # internally changed to `s = sum(numbers)`
-    # `numbers` are available only when `--lines` or `--end` set
-    echo -e "1\n2\n3\n4" | pz sum --lines
+    # internally changed to `s = sum(numbers)`    
+    echo -e "1\n2\n3\n4" | pz sum
     1
     3
     6
     10
   
-    # internally changed to `' - '.join(lines)`
-    # `lines` are available only when `--lines` or `--end` set  
+    # internally changed to `' - '.join(lines)`      
     echo -e "1\n2\n3\n4" | pz  --end "' - '.join"
     1 - 2 - 3 - 4
     ```
@@ -507,8 +503,8 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     2: another row
     ```
     <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
-* `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for final output.
-    Turns on the `--lines` automatically because we do not expect an infinite stream.
+* `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for the final output.
+    The variable `text` is available by default here.
     ```bash
     $ echo -e "1\n2\n3\n4" | pz --end sum
     10
@@ -545,39 +541,11 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     True
     ```
 * `-f`, `--format`: Main and end clauses are considered f-strings. The clause is inserted in between three-apostrophes `f'''COMMAND'''` internally.
-  
-### Populating variables
-* `t`, `--text`: Fetch the whole text first before processing. Variable `text` is available containing whole text. You might want to add `-1` flag.
-    ```bash
-    $ echo -e "1\n2\n3" | pz 'len(text)' 
-    Did not you forget to use --text?
-    ```
-  
-    Appending `--text` helps but the result is processed for every line again.
-    ```bash
-    $ echo -e "1\n2\n3" | pz 'len(text)' -t 
-    6
-    6
-    6
-    ```
-  
-    Appending `-1` makes sure the statement gets computed only once. 
-    ```bash
-    $ echo -e "1\n2\n3" | pz 'len(text)' -t1
-    6    
-    ```
-* `--lines`: Populate `lines` and `numbers` with lines. This is off by default due to an overflow when handling an infinite input.
-    ```bash
-    $ echo -e "1\n2\n3\n4" | pz sum  --lines  # (internally changed to `s = sum(numbers)`
-    1
-    3
-    6
-    10      
-    ```
+
 
 ### Input / output  
-* `n NUM`: Process only such number of lines. Roughly equivalent to `head -n`.
-* `-1`: Process just the first line. Useful in combination with `--text`.
+* `-n NUM`: Process only such number of lines. Roughly equivalent to `head -n`.
+* `-1`: Process just the first line.
 * `-0`: Skip all lines output. (Useful in combination with `--end`.)
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
@@ -604,7 +572,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   20
   25
   ```
-* `--stderr` Print commands output to the STDERR, while letting the original line piped to STDOUT intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make STDERR to receive a message. 
+* `--stderr` Print commands output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
   pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr 
   1
@@ -621,7 +589,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   Processed next few lines
   ```
   
-  Demonstrate different pipes by writing STDOUT to a file and leaving STDERR in the terminal. 
+  Demonstrate different pipes by writing `STDOUT` to a file and leaving `STDERR` in the terminal. 
 
   ```bash
   pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr > /tmp/example
@@ -634,6 +602,17 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   2
   3
   ...  
+  ```
+* `--overflow-safe` Prevent `lines`, `numbers`, `text` variables to be available. Useful when handling an infinite input.
+  ```
+  # prevent `text` to be populated by default
+  echo -e  "1\n2\n2\n3" | pz --end "len(text)" --overflow-safe
+  Did you not forget to use --while to access `text`?
+  Exception: <class 'NameError'> name 'text' is not defined in the --end clause
+  
+  # force to populate `text` 
+  echo -e  "1\n2\n2\n3" | pz --end "len(text)" --overflow-safe --whole
+  7
   ```
 
 ### Regular expressions shortcuts
