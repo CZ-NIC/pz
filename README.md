@@ -62,8 +62,7 @@ How does your data look when pythonized via `pz`? Which Bash programs may the ut
 
 Just use the `[:]` notation.
 
-```
-bash
+```bash
 echo "hello world" | pz s[6:]  # hello
 ```
 
@@ -72,8 +71,11 @@ echo "hello world" | pz s[6:]  # hello
 We prepend the length of the line.
 
 ```bash
-tail -f /var/log/syslog | pz 'f"{len(s)}: {s}"' 
-# or using the f-string flag: pz -f '{len(s)}: {s}' 
+# let's use the f-string `--format` flag
+tail -f /var/log/syslog | pz -f '{len(s)}: {s}' 
+
+# or do it the long way, explicitly setting the `s` variable
+tail -f /var/log/syslog | pz 's = str(len(s)) + ": " + s'
 ```
 
 ## Converting to uppercase
@@ -130,14 +132,14 @@ However, an advantage over `| sort | uniq` comes when handling a stream. You see
 
 Alternatively, to assure the values are sorted, we can make a use of `--end` flag that produces the output after the processing finished.
 ```bash
-echo -e "1\n2\n2\n3" | pz "S.add(s)" --end "sorted(S)"  -0
+echo -e "1\n2\n2\n3" | pz "S.add(s)" --end "sorted(S)" -0
 ```
 
 Note that we used the variable `S` which is initialized by default to an empty set (hence we do not have to use `--setup` at all) and the flag `-0` to prevent the processing from output (we do not have to use `skip` parameter then).
 
 <sub>(Strictly speaking we could omit `-0` too. If you use the verbose `-v` flag, you would see the command changed to `s = S.add(s)` internally. And since `set.add` produces `None` output, it is the same as if it was skipped.)</sub>
 
-We can omit `(s)` in the `command` clause and hence get rid of the quotes all together.
+We can omit `(s)` in the `main` clause and hence get rid of the quotes all together.
 ```bash
 echo -e "1\n2\n2\n3" | pz S.add --end "sorted(S)"
 ```
@@ -158,7 +160,7 @@ echo -e "red green\nblue red green" | pz 'S.update(s.split())' --end 'len(S)'  #
 
 But what if we want to get the most common words and the count of its usages? Let's use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
 ```bash
-echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_common
+$ echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_common
 red, 2
 green, 2
 blue, 1
@@ -218,7 +220,7 @@ echo 5 | pz 'for c in range(1,n): n*= c ; s = n'   # 120
 Using generator will print a factorial for every number from 1 to `-g`.
 
 ```bash
-pz factorial -g5
+$ pz factorial -g5
 1
 2
 6
@@ -269,7 +271,7 @@ Let's have a stream and output the average value.
 
 ```bash
 # print out current line `counter` and current average `sum/counter`
-while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=counter, sum/counter' --setup "sum=0"
+$ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=counter, sum/counter' --setup "sum=0"
 1, 38.0
 2, 67.0
 3, 62.0
@@ -277,7 +279,7 @@ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=counter
 
 # print out every 10 000 lines
 # (thanks to `not i % 10000` expression) 
-while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/counter; s = (counter,s) if not counter % 10000 else ""' --setup "sum=0"
+$ while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/counter; s = (counter,s) if not counter % 10000 else ""' --setup "sum=0"
 10000, 50.9058
 20000, 50.7344
 30000, 50.693466666666666
@@ -286,7 +288,7 @@ while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/counter; s = 
 
 How can this be simplified? Let's use an infinite generator `-g0`. As we know, `n` is given current line number by the generator and `i` is by default implicitly declared to `i=0` so we use it to hold the sum. No setup clause needed. No Bash cycle needed. 
 ```bash
-pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
+$ pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
 10000, 49.9488
 20000, 50.5399
 30000, 50.39906666666667
@@ -298,7 +300,7 @@ pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
 Should you need to evaluate a short multiline statement, use standard multiline statements, supported by Bash.
 
 ```bash
-echo -e "1\n2\n3" | pz "if n > 2:
+$ echo -e "1\n2\n3" | pz "if n > 2:
   s = 'bigger'
 else:
   s = 'smaller'
@@ -314,7 +316,7 @@ Simulate a lengthy processing by generating a long sequence of numbers (as they 
 On every 100th line, we move cursor up (`\033[1A`), clear line (`\033[K`) and print to `STDERR` current status.  
 
 ```bash
-seq 1 100000 | pz 's = f"\033[1A\033[K ... {counter} ..." if counter % 100 == 0 else None ' --stderr 1>/dev/null
+$ seq 1 100000 | pz 's = f"\033[1A\033[K ... {counter} ..." if counter % 100 == 0 else None ' --stderr 1>/dev/null
  ... 100 ...  # replaced by ... 200 ...
 ```
 
@@ -339,13 +341,13 @@ echo 5.2 | pz n+2  # 7.2
 ### `counter` – current line number
 ```bash
 # display every 1_000nth line
-pz -g0 n*3 | pz "n if not counter % 1000 else None"
+$ pz -g0 n*3 | pz "n if not counter % 1000 else None"
 3000
 6000
 9000
 
 # the same, using the --filter flag
-pz -g0 n*3 | pz -F "not counter % 1000"
+$ pz -g0 n*3 | pz -F "not counter % 1000"
 ```
 
 ### `text` – whole text, all lines together
@@ -355,16 +357,16 @@ Ex: get character count (an alternative to `| wc -c`).
 echo -e "hello\nworld" | pz --end 'len(text)' # 11
 ```
 
-When used in the main clause, an error appears. 
+When used in the `main` clause, an error appears. 
 ```bash
-echo -e "1\n2\n3" | pz 'len(text)'
+$ echo -e "1\n2\n3" | pz 'len(text)'
 Did not you forget to use --text?
 Exception: <class 'NameError'> name 'text' is not defined on line: 1
 ```
 
 Appending `--whole` helps, but the result is processed for every line.
 ```bash
-echo -e "1\n2\n3" | pz 'len(text)' -w 
+$ echo -e "1\n2\n3" | pz 'len(text)' -w 
 5
 5
 5
@@ -372,7 +374,7 @@ echo -e "1\n2\n3" | pz 'len(text)' -w
 
 Appending `-1` makes sure the statement gets computed only once. 
 ```bash
-echo -e "1\n2\n3" | pz 'len(text)' -w1
+$ echo -e "1\n2\n3" | pz 'len(text)' -w1
 5
 ```
 
@@ -409,7 +411,7 @@ Some variables are initialized and ready to be used globally. They are common fo
 
 Using a set `S`. In the example, we add every line to the set and end print it out in a sorted manner.
 ```bash
-echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
+$ echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
 1
 2
 3  
@@ -417,7 +419,7 @@ echo -e "2\n1\n2\n3\n1" | pz "S.add(s)" --end "sorted(S)"
 
 Using a list `L`. Append lines that contains a number bigger than one and finally, print their count. As only the final count matters, suppress the line output with the flag `-0`. 
 ```bash
-echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
+$ echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 3  
 ```
 
@@ -431,7 +433,7 @@ echo -e "2\n1\n2\n3\n1" | pz "if n > 1: L.append(s)" --end "len(L)" -0
 
 Caveat: When accessed first time, the auto-import makes the row reprocessed. It may influence your global variables. Use verbose output to see if something has been auto-imported. 
 ```bash
-echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -v
+$ echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -v
 Importing sleep from time
 2, 1
 3, 2
@@ -524,11 +526,11 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```
 * `-q`, `--quiet`: See errors and values only. Suppress command exceptions.
   ```bash
-  $ echo -e "hello" | pz 'invalid command' --quiet # empty result
+  echo -e "hello" | pz 'invalid command' --quiet # empty result
   ```
   
 ### Command clauses
-* `COMMAND`: The main clause, any Python script executed on every line (multiple statements allowed)
+* `COMMAND`: The `main` clause, any Python script executed on every line (multiple statements allowed)
 * `-S COMMAND`, `--setup COMMAND`: Any Python script, executed before processing. Useful for variable initializing.
     Ex: prepend line numbers by incrementing a variable `count`.
     ```bash
@@ -595,9 +597,9 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     
     bu
     ```
-* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count. If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. 
+* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count. If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. If no `main` clause set, the number is piped out. 
   ```bash
-  $ pz n -g2
+  $ pz -g2
   1
   2
   $ pz 'i=i+5' -g -vvv
@@ -610,7 +612,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   ```
 * `--stderr` Print commands output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
-  pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr 
+  $ pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr 
   1
   2
   3
@@ -628,7 +630,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   Demonstrate different pipes by writing `STDOUT` to a file and leaving `STDERR` in the terminal. 
 
   ```bash
-  pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr > /tmp/example
+  $ pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr > /tmp/example
   Processed next few lines
   Processed next few lines
   Processed next few lines

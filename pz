@@ -293,14 +293,17 @@ if __name__ == "__main__":
     args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
 
     if not command["main"]:
-        if command["end"] is None:
-            logger.error("You have to specify either main COMMAND or --end COMMAND.")
-            quit()
-
-        # no main clause specified -> we may limit or turn off processing
-        # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
-        # running can be skipped or at least run partially to fill `lines`
-        args.run = False if args.overflow_safe else 1
+        if not command["end"]:
+            if args.generate is not None:
+                command["main"] = "s"
+            else:
+                logger.error("You have to specify either main COMMAND or --end COMMAND.")
+                quit()
+        else:
+            # no main clause specified -> we may limit or turn off processing
+            # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
+            # running can be skipped or at least run partially to fill `lines`
+            args.run = False if args.overflow_safe else 1
 
     # empty variables available in the user scope
     i = 0
