@@ -3,6 +3,7 @@ import sys
 import unittest
 from subprocess import Popen, PIPE, STDOUT, DEVNULL
 from time import time
+from types import GeneratorType
 from typing import Optional
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -92,8 +93,8 @@ class TestMaster(unittest.TestCase):
             p = Popen(cmd, shell=True, stdout=PIPE, stderr=stderr)
             stdout = p.communicate()[0]
         elif piped_text:
-            if isinstance(piped_text, list):
-                piped_text = "\n".join(piped_text)
+            if isinstance(piped_text, (list, GeneratorType, range)):
+                piped_text = "\n".join(str(s) for s in piped_text)
             elif not isinstance(piped_text, str):
                 piped_text = str(piped_text)
             p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=stderr)
@@ -109,7 +110,8 @@ class TestMaster(unittest.TestCase):
             print(val)
         if expect is not None:
             if isinstance(expect, list):
-                self.assertListEqual(expect, val)
+                # since the program returns always strings, allow to compare with a list of ints
+                self.assertListEqual([str(x) for x in expect], val)
             else:
                 self.assertEqual([str(expect)], val)
 
@@ -189,12 +191,12 @@ class TestFlags(TestMaster):
         self.go(self.col2 + ' == "Jamaica"', CSV, empty=True, expect=['True'] + ['False'] * 9)
 
     def test_skip_all(self):
-        """ flag `-0` works however it can be overriden by using `skip` variable """
+        """ flag `-0` works however it can be overridden by using `skip` variable """
         # lines are output normally
         self.go("s", "1\n2\n2\n3", expect=["1", "2", "2", "3"])
         # when -0, no lines are shown
         self.go("s", "1\n2\n2\n3", expect=[], custom_cmd="-0")
-        # however, this behaviour is overriden by using `skip`
+        # however, this behaviour is overridden by using `skip`
         self.go("skip = s == '2'", "1\n2\n2\n3", expect=["1", "3"], custom_cmd="-0")
         # `skip` can override just some cases, others remain skipped through `-0` by default
         self.go("if s == '2': skip = False", "1\n2\n2\n3", expect=["2", "2"], custom_cmd="-0")
@@ -215,8 +217,10 @@ class TestFlags(TestMaster):
 
     def test_stderr(self):
         """ When using --stderr flag, the contents piped to STDOUT must stay intact. """
+
         def _test(cmd):
             return Popen(["./pz", "--end", "'end'"] + cmd, stdout=PIPE, stdin=PIPE, stderr=PIPE).communicate(b"1")
+
         self.assertEqual((b'1\nend\n', b''), _test(["s"]))
         self.assertEqual((b'1\n', b'1\nend\n'), _test(["s", "--stderr"]))
         self.assertEqual((b'1\n', b'3\nend\n'), _test(["n+2", "--stderr"]))
@@ -270,7 +274,7 @@ class TestVariables(TestMaster):
     def test_set(self):
         self.go("S.add(s)", "2\n1\n2\n3\n1", end="sorted(S)", expect=["1", "2", "3"])
 
-    def test_counter(self):
+    def test_counter_object(self):
         # unique letters
         self.go("C.update(s)", "one two\nthree four two one", end="len(C)", expect=10)
         # unique words
@@ -278,6 +282,9 @@ class TestVariables(TestMaster):
         # most common
         self.go("C.update(s.split())", "one two\nthree four two one", end="C.most_common",
                 expect=["one, 2", "two, 2", "three, 1", "four, 1"])
+
+    def test_counter(self):
+        self.go("counter", range(5), expect=[1, 2, 3, 4, 5])
 
     def test_generator(self):
         self.go("n", generate="2", expect=["1", "2"])
@@ -298,7 +305,7 @@ class TestReturnValues(TestMaster):
         self.assertEqual("Jamaica", self.go_csv(self.col2)[0])
 
     def test_single_line_with_assignment(self):
-        """ `s = ` is not prepended, assignement is already present """
+        """ `s = ` is not prepended, assignment is already present """
         self.assertEqual("Jamaica", self.go_csv('s = ' + self.col2)[0])
 
     def test_keyword_without_assignment(self):

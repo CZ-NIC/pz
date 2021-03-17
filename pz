@@ -102,6 +102,7 @@ skip_all = args.zero
 # custom functions
 whole_hint_printed = False
 match_class = match('', '').__class__ if sys.version_info < (3, 7) else Match  # drop with Python3.6
+flush = None  # by default, we do not change flushing behaviour
 
 
 def write(v):
@@ -109,7 +110,8 @@ def write(v):
     if type(v) is bytes:
         write_pipe.buffer.write(v + b'\n')
     else:
-        print(v, file=write_pipe)
+        # if needed, we may explicitly flush bytes output too
+        print(v, file=write_pipe, flush=flush)
 
 
 @contextmanager
@@ -265,180 +267,181 @@ def prepare_command(name):
     command[name] = cmd
 
 
-# prepare commands (prepend `line =` if needed)
-command = {"main": "", "end": ""}
-regular_command = None  # prepare regular modifications
-reg_ex = None
-if args.match or args.findall or args.search or args.sub:
-    try:
-        reg_ex = re.compile(args.main)
-    except re.error as e:
-        logger.error(f"re.error: Compilation failed with {e}")
-        quit()
-    if args.match:
-        regular_command = reg_ex.match
-    elif args.search:
-        regular_command = reg_ex.search
-    elif args.findall:
-        regular_command = reg_ex.findall
-    elif args.sub:
-        regular_command = lambda line: reg_ex.sub(args.sub, line)
-[prepare_command(name) for name in command]
-
-
-# determine args.run and possibly turn on args.lines and args.text
-args.run = True  # True = run whole processing, 1 = partial run, False = do not run
-args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
-
-if not command["main"]:
-    if command["end"] is None:
-        logger.error("You have to specify either main COMMAND or --end COMMAND.")
-        quit()
-
-    # no main clause specified -> we may limit or turn off processing
-    # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
-    # running can be skipped or at least run partially to fill `lines`
-    args.run = False if args.overflow_safe else 1
-
-# empty variables available in the user scope
-i = 0
-S = set()
-L = list()
-D = dict()
-C = Counter()
-skip = None  # if user sets to False, the line will not be output
-
-
-# prepare text processing (either fetch whole or line by line)
-# Note: do not initialize the `text` to None. We want to be able to catch
-# `<class 'NameError'> name 'text' is not defined` while not turning `--text` on
-text: str
-if args.generate is not None:
-    # `--generate=5` → 1,2,3,4,5
-    # `--generate=0` -> 1 .. infinity
-    # When used an infinite generator, it overflows at the end. However, I think the more common use is to profit
-    # from the line number generated than be afraid of the overflow
-    # that can be avoided by: `pz "while True: print(1)" -g1`
-    loop = (str(i) for i in (range(1, args.generate + 1) if args.generate else count(1)))
-elif args.whole:
-    # fetch whole text
-    try:
-        text = sys.stdin.read().rstrip()  # we strip the last newline
-    except KeyboardInterrupt:
-        logger.error("KeyboardInterrupt: Loading `text` interrupted.")
-        text = ""
-    loop = (line for line in text.splitlines()[:args.n])
-else:
-    # load lines one by one (while taking at most N lines)
-    loop = islice(sys.stdin, args.n)
-
-
-# filled-in variables available in the user scope
-n = None
-lines: list
-numbers: list
-counter: int  # XX decide the name, docs and test
-
-if args.lines:
-    lines = []
-    numbers = []
-    counter = 0
-
-# internal processing variables
-tried_to_correct_callable = False
-original_line = s = None
-
-# run the setup clause
-if args.setup:
-    while True:
-        with auto_import():
-            exec(args.setup)
-            break
-
-# run processing
-if args.run:  # speed up when there is no main clause
-    while True:
+if __name__ == "__main__":
+    # prepare commands (prepend `line =` if needed)
+    command = {"main": "", "end": ""}
+    regular_command = None  # prepare regular modifications
+    reg_ex = None
+    if args.match or args.findall or args.search or args.sub:
         try:
-            try:
-                original_line = s = next(loop).rstrip()
-            except StopIteration:
-                break
-            n = get_number(s)
-            if args.lines:
-                # these variables might be undefined by purpose (and user should not see it)
-                # noinspection PyUnboundLocalVariable
-                counter += 1
-                # noinspection PyUnboundLocalVariable
-                lines.append(s)
-                if n:
-                    # noinspection PyUnboundLocalVariable
-                    numbers.append(n)
+            reg_ex = re.compile(args.main)
+        except re.error as exc:
+            logger.error(f"re.error: Compilation failed with {exc}")
+            quit()
+        if args.match:
+            regular_command = reg_ex.match
+        elif args.search:
+            regular_command = reg_ex.search
+        elif args.findall:
+            regular_command = reg_ex.findall
+        elif args.sub:
+            regular_command = lambda line: reg_ex.sub(args.sub, line)
+    [prepare_command(name) for name in command]
 
-            if args.run is not True:  # speed up, further processing not needed
-                continue
+    # determine args.run and possibly turn on args.lines and args.text
+    args.run = True  # True = run whole processing, 1 = partial run, False = do not run
+    args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
 
-            while True:
-                with auto_import():
-                    # loop until all on the fly imports are done
-                    skip = None
-                    # we process either a regular expression or a custom command
-                    if regular_command:
-                        try:
-                            s = regular_command(s)
-                        except re.error as e:
-                            logger.error(f"{e}, regular expression: {args.main} on line: {s}")
-                            break
-                    else:  # resolving custom command
-                        # note that exec will not affect local field, hence we cannot easily put this in a method
-                        exec(command["main"])
-                    if skip or (skip_all and skip is not False):  # user chooses to filter out the line
-                        break
-                    output(s)
-                    break
-        except BrokenPipeError:
-            # do not continue processing when pipe is broken
-            # ex: process we pipe into is killed
-            # There is a chance we want to pipe something to the STDERR in the --end clause, hence we do not quit.
-            s = args.main if regular_command else command['main']
-            logger.error(f"BrokenPipeError: No output pipe when processing the main clause '{s}'")
-            break
-        except KeyboardInterrupt:  # useful for ending up an infinite generator
-            # Break but continue when SIGINT caught in case we have an END clause.
-            # No problem when output to the terminal or to the STDERR. If output to another process via STDOUT,
-            # since whole process group received SIGINT, the output is lost if the process might is stopping right now,
-            # or BrokenPipeError is raised if the process has already stopped.
-            break
-        except Exception as e:
-            logger.warning(f'Exception: {type(e)} {e} on line: {s}')
-            continue
-# run final script
-if command["end"]:
-    if not args.whole and args.lines:
-        # --text was off by default so we did not wait whole input to be piped in before processing.
-        # The variable `text` was not available before but there is no obstacle in letting it
-        # to be automatically available at the end – we have everything needed in the `lines` variable.
-        text = "\n".join(lines)
+    if not command["main"]:
+        if command["end"] is None:
+            logger.error("You have to specify either main COMMAND or --end COMMAND.")
+            quit()
 
-    original_line = s = n = None
-    try:
+        # no main clause specified -> we may limit or turn off processing
+        # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
+        # running can be skipped or at least run partially to fill `lines`
+        args.run = False if args.overflow_safe else 1
+
+    # empty variables available in the user scope
+    i = 0
+    S = set()
+    L = list()
+    D = dict()
+    C = Counter()
+    skip = None  # if user sets to False, the line will not be output
+
+    # prepare text processing (either fetch whole or line by line)
+    # Note: do not initialize the `text` to None. We want to be able to catch
+    # `<class 'NameError'> name 'text' is not defined` while not turning `--text` on
+    text: str
+    if args.generate is not None:
+        # `--generate=5` → 1,2,3,4,5
+        # `--generate=0` -> 1 .. infinity
+        # When used an infinite generator, it overflows at the end. However, I think the more common use is to profit
+        # from the line number generated than be afraid of the overflow
+        # that can be avoided by: `pz "while True: print(1)" -g1`
+        loop = (str(i) for i in (range(1, args.generate + 1) if args.generate else count(1)))
+        # turn on flushing
+        # Ex: it took a lot of time before buffer flushed out when flushing to another pz instance
+        #   (and not to the console) in the command: `pz -g0 "s = randint(1,100); sleep(0.01)"  | pz s
+        flush = True
+    elif args.whole:
+        # fetch whole text
+        try:
+            text = sys.stdin.read().rstrip()  # we strip the last newline
+        except KeyboardInterrupt:
+            logger.error("KeyboardInterrupt: Loading `text` interrupted.")
+            text = ""
+        loop = (line for line in text.splitlines()[:args.n])
+    else:
+        # load lines one by one (while taking at most N lines)
+        loop = islice(sys.stdin, args.n)
+
+    # filled-in variables available in the user scope
+    n = None
+    lines: list
+    numbers: list
+    counter: int
+
+    if args.lines:
+        lines = []
+        numbers = []
+        counter = 0
+
+    # internal processing variables
+    tried_to_correct_callable = False
+    original_line = s = None
+
+    # run the setup clause
+    if args.setup:
         while True:
             with auto_import():
-                exec(command["end"])
-                output(s, True)
+                exec(args.setup)
                 break
-    except BrokenPipeError:
-        logger.error(f"BrokenPipeError: No output pipe in the --end clause '{command['end']}'")
-    except Exception as e:
-        logger.warning(f'Exception: {type(e)} {e} in the --end clause')
 
-# Gratuitous exit
-# Ex: The middle command in `pz -g0 s | pz -E "sleep(1)" s | xargs echo` would often end up with
-#   Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
-#   BrokenPipeError: [Errno 32] Broken pipe
-# because `xargs` having received a SIGINT has already stopped.
-# We prevent this situation by manually closing the STDOUT.
-for close in (sys.stdout.flush, sys.stdout.close):
+    # run processing
+    if args.run:  # speed up when there is no main clause
+        while True:
+            try:
+                try:
+                    original_line = s = next(loop).rstrip()
+                except StopIteration:
+                    break
+                n = get_number(s)
+                if args.lines:
+                    # these variables might be undefined by purpose (and user should not see it)
+                    # noinspection PyUnboundLocalVariable
+                    counter += 1
+                    # noinspection PyUnboundLocalVariable
+                    lines.append(s)
+                    if n:
+                        # noinspection PyUnboundLocalVariable
+                        numbers.append(n)
+
+                if args.run is not True:  # speed up, further processing not needed
+                    continue
+
+                while True:
+                    with auto_import():
+                        # loop until all on the fly imports are done
+                        skip = None
+                        # we process either a regular expression or a custom command
+                        if regular_command:
+                            try:
+                                s = regular_command(s)
+                            except re.error as exc:
+                                logger.error(f"{exc}, regular expression: {args.main} on line: {s}")
+                                break
+                        else:  # resolving custom command
+                            # note that exec will not affect local field, hence we cannot easily put this in a method
+                            exec(command["main"])
+                        if skip or (skip_all and skip is not False):  # user chooses to filter out the line
+                            break
+                        output(s)
+                        break
+            except BrokenPipeError:
+                # do not continue processing when pipe is broken
+                # ex: process we pipe into is killed
+                # There is a chance we want to pipe something to the STDERR in the --end clause, hence we do not quit.
+                s = args.main if regular_command else command['main']
+                logger.error(f"BrokenPipeError: No output pipe when processing the main clause '{s}'")
+                break
+            except KeyboardInterrupt:  # useful for ending up an infinite generator
+                # Break but continue when SIGINT caught in case we have an END clause.
+                # No problem when output to the terminal or to the STDERR. If output to another process via STDOUT,
+                # since whole process group received SIGINT, the output is lost if the process is stopping right now,
+                # or BrokenPipeError is raised if the process has already stopped.
+                break
+            except Exception as exc:
+                logger.warning(f'Exception: {type(exc)} {exc} on line: {s}')
+                continue
+    # run final script
+    if command["end"]:
+        if not args.whole and args.lines:
+            # --text was off by default so we did not wait whole input to be piped in before processing.
+            # The variable `text` was not available before but there is no obstacle in letting it
+            # to be automatically available at the end – we have everything needed in the `lines` variable.
+            text = "\n".join(lines)
+
+        original_line = s = n = None
+        try:
+            while True:
+                with auto_import():
+                    exec(command["end"])
+                    output(s, True)
+                    break
+        except BrokenPipeError:
+            logger.error(f"BrokenPipeError: No output pipe in the --end clause '{command['end']}'")
+        except Exception as exc:
+            logger.warning(f'Exception: {type(exc)} {exc} in the --end clause')
+
+    # Gratuitous exit
+    # Ex: The middle command in `pz -g0 s | pz -E "sleep(1)" s | xargs echo` would often end up with
+    #   Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
+    #   BrokenPipeError: [Errno 32] Broken pipe
+    # because `xargs` having received a SIGINT has already stopped.
+    # We prevent this situation by manually closing the STDOUT.
     try:
-        close()
+        sys.stdout.close()
     except BrokenPipeError:
         pass

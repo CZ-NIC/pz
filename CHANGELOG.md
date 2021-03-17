@@ -7,7 +7,8 @@
 - generator
 - skip processing if not needed to speed up
 - command chaining tuned up
-- `--format`, `--stderr` flags
+- `--format`, `--stderr`, `--overflow-safe` flags
+- `counter` variable
 
 ## 0.9 (2020-12-02)
 - other modules added for auto-import

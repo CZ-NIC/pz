@@ -4,8 +4,7 @@ from setuptools import setup
 
 # load long description
 p = Path("README.md")
-if p.exists():
-    long_description = p.read_text()
+long_description = p.read_text() if p.exists() else None
 
 setup(
     name='pz',

@@ -2,7 +2,7 @@
 [![Build Status](https://travis-ci.org/CZ-NIC/pz.svg?branch=main)](https://travis-ci.org/CZ-NIC/pz)
 [![Downloads](https://pepy.tech/badge/pz)](https://pepy.tech/project/pz)
 
-Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
+Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python, but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
 
 **How? Simply meddle with the `s` variable.** Example: appending '.com' to every line.
 ```bash
@@ -33,6 +33,7 @@ wikipedia.com
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
     + [`n` – current line converted to an `int` (or `float`) if possible](#n--current-line-converted-to-an-int-or-float-if-possible)
+    + [`counter` – current line number](#counter--current-line-number)
     + [`text` – whole text, all lines together](#text--whole-text-all-lines-together)
     + [`lines` – list of lines so far processed](#lines--list-of-lines-so-far-processed)
     + [`numbers` – list of numbers so far processed](#numbers--list-of-numbers-so-far-processed)
@@ -84,7 +85,7 @@ echo "HELLO" | pz s.lower  # "hello"
 ```
 ## Parsing numbers
 
-Replacing `cut`. Note you can chain multiple `pz` calls. Split by comma '`,`', then use `n` to access the line converted to a number. 
+Replacing `cut`. Note you can chain multiple `pz` calls. Split by a comma '`,`', then use `n` to access the line converted to a number. 
 ```bash
 echo "hello,5" | pz 's.split(",")[1]' | pz n+7  # 12
 ```
@@ -116,7 +117,7 @@ echo -e "1\n2\n3\n4" | pz --end sum  # 10
 
 ## Keep unique lines
 
-Replacing `| sort | uniq` makes little sense but the demonstration gives you the idea. We initialize a set `c` (like a *collection*). When processing a line, `skip` is set to `True` if already seen.  
+Replacing `| sort | uniq` makes little sense, but the demonstration gives you the idea. We initialize a set `c` (like a *collection*). When processing a line, `skip` is set to `True` if already seen.  
 
 ```bash
 $ echo -e "1\n2\n2\n3" | pz "skip = s in c; c.add(s)"  --setup "c=set()"
@@ -155,7 +156,7 @@ We split the line to get the words and put them in `S`, a global instance of the
 echo -e "red green\nblue red green" | pz 'S.update(s.split())' --end 'len(S)'  # 3
 ```
 
-But what if we want to get the most common words and the count of its usages? Lets use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
+But what if we want to get the most common words and the count of its usages? Let's use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
 ```bash
 echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_common
 red, 2
@@ -182,7 +183,7 @@ Importing requests
 
 
 ## Handling nested quotes
-To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimite the `COMMAND` flag. If we used an apostrophe in the text, we had have to slash it. Instead, triple quotes might improve readability.
+To match every line that has a quoted expressions and print out the quoted contents, you may serve yourself of Python triple quotes. In the example below, an apostrophe is used to delimit the `COMMAND` flag. If we used an apostrophe in the text, we would have to slash it. Instead, triple quotes might improve readability.
 ```bash
 echo -e 'hello "world".' | pz 'match(r"""[^"]*"(.*)".""", s)' # world
 ```
@@ -239,7 +240,7 @@ echo '"a","b1,b2,b3","c"' | pz --end "(x[1] for x in csv.reader(lines))"  # "b1,
 
 ## Generate random number
 
-First, take a look how to stream random numbers to 100 in the bash.
+First, take a look how to stream random numbers to 100 in Bash.
 
 ```bash
 while :; do echo $((1+$RANDOM%100)); done
@@ -267,8 +268,8 @@ pz "''.join(random.choice(string.ascii_letters) for _ in range(randint(1,30)))" 
 Let's have a stream and output the average value.
 
 ```bash
-# print out current line `i` and current average `sum/i`
-while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'i+=1;sum+=n;s=i, sum/i' --setup "sum=0"
+# print out current line `counter` and current average `sum/counter`
+while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=counter, sum/counter' --setup "sum=0"
 1, 38.0
 2, 67.0
 3, 62.0
@@ -276,14 +277,14 @@ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'i+=1;sum+=n;s=i,
 
 # print out every 10 000 lines
 # (thanks to `not i % 10000` expression) 
-while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'i+=1;sum+=n;s=sum/i; s = (i,s) if not i % 10000 else ""' --setup "sum=0"
+while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/counter; s = (counter,s) if not counter % 10000 else ""' --setup "sum=0"
 10000, 50.9058
 20000, 50.7344
 30000, 50.693466666666666
 40000, 50.5904
 ```
 
-How can this be simplified? Let's use an infinite generator `-g0`. As we know, `n` is given current line number by the generator and `i` is by default implicitly declared to `i=0` so we use it to hold the sum. No setup clause needed. No bash cycle needed. 
+How can this be simplified? Let's use an infinite generator `-g0`. As we know, `n` is given current line number by the generator and `i` is by default implicitly declared to `i=0` so we use it to hold the sum. No setup clause needed. No Bash cycle needed. 
 ```bash
 pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
 10000, 49.9488
@@ -294,7 +295,7 @@ pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
 
 ## Multiline statements
 
-Should you need to evaluate a short multiline statement, use standard multiline statements, supported by bash.
+Should you need to evaluate a short multiline statement, use standard multiline statements, supported by Bash.
 
 ```bash
 echo -e "1\n2\n3" | pz "if n > 2:
@@ -313,7 +314,7 @@ Simulate a lengthy processing by generating a long sequence of numbers (as they 
 On every 100th line, we move cursor up (`\033[1A`), clear line (`\033[K`) and print to `STDERR` current status.  
 
 ```bash
-seq 1 100000 | pz 'i+=1; s = f"\033[1A\033[K ... {i} ..." if i % 100 == 0 else None ' --stderr 1>/dev/null
+seq 1 100000 | pz 's = f"\033[1A\033[K ... {counter} ..." if counter % 100 == 0 else None ' --stderr 1>/dev/null
  ... 100 ...  # replaced by ... 200 ...
 ```
 
@@ -335,11 +336,44 @@ echo 5 | pz n+2  # 7
 echo 5.2 | pz n+2  # 7.2
 ```
 
+### `counter` – current line number
+```bash
+# display every 1_000nth line
+pz -g0 n*3 | pz "n if not counter % 1000 else None"
+3000
+6000
+9000
+
+# the same, using the --filter flag
+pz -g0 n*3 | pz -F "not counter % 1000"
+```
+
 ### `text` – whole text, all lines together
 Not available with the `--overflow-safe` flag set nor in the `main` clause unless the `--whole` flag set.
 Ex: get character count (an alternative to `| wc -c`).
 ```
 echo -e "hello\nworld" | pz --end 'len(text)' # 11
+```
+
+When used in the main clause, an error appears. 
+```bash
+echo -e "1\n2\n3" | pz 'len(text)'
+Did not you forget to use --text?
+Exception: <class 'NameError'> name 'text' is not defined on line: 1
+```
+
+Appending `--whole` helps, but the result is processed for every line.
+```bash
+echo -e "1\n2\n3" | pz 'len(text)' -w 
+5
+5
+5
+```
+
+Appending `-1` makes sure the statement gets computed only once. 
+```bash
+echo -e "1\n2\n3" | pz 'len(text)' -w1
+5
 ```
 
 ### `lines` – list of lines so far processed
@@ -353,7 +387,7 @@ echo -e "hello\nworld" | pz --end lines[-1]  # "world"
 Not available with the `--overflow-safe` flag set.  
 Ex: show current average of the stream. More specifically, we output tuples: `line count, current line, average`.
 ```bash
-$ echo -e "20\n40\n25\n28" | pz 'i+=1; s = i, s, sum(numbers)/i'
+$ echo -e "20\n40\n25\n28" | pz 's = counter, s, sum(numbers)/counter'
 1, 20, 20.0
 2, 40, 30.0
 3, 25, 28.333333333333332
@@ -371,7 +405,7 @@ Some variables are initialized and ready to be used globally. They are common fo
 * `D = dict()`
 * `C = Counter()`
 
-<sub>It is true that using uppercase is not conforming the naming convention. However in these tiny scripts the readability is the chief principle, every character counts.</sub>
+<sub>It is true that using uppercase is not conforming the naming convention. However, in these tiny scripts the readability is the chief principle, every character counts.</sub>
 
 Using a set `S`. In the example, we add every line to the set and end print it out in a sorted manner.
 ```bash
@@ -501,8 +535,10 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
     1: row
     2: another row
+  
+    # the same using globally available variable `counter` instead of using `--setup` and the `--format` flag
+    $ echo -e "row\nanother row" | pz -f '{counter}: {s}'
     ```
-    <sub>Yes, we could use globally initialized variable `i` instead of using `--setup`.</sub>
 * `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for the final output.
     The variable `text` is available by default here.
     ```bash
@@ -574,7 +610,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   ```
 * `--stderr` Print commands output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
-  pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr 
+  pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr 
   1
   2
   3
@@ -592,7 +628,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   Demonstrate different pipes by writing `STDOUT` to a file and leaving `STDERR` in the terminal. 
 
   ```bash
-  pz -g=9 s | pz "i+=1; s = 'Processed next few lines' if i % 3 == 0 else None" --stderr > /tmp/example
+  pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr > /tmp/example
   Processed next few lines
   Processed next few lines
   Processed next few lines
