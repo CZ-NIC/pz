@@ -33,7 +33,7 @@ wikipedia.com
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
     + [`n` – current line converted to an `int` (or `float`) if possible](#n--current-line-converted-to-an-int-or-float-if-possible)
-    + [`counter` – current line number](#counter--current-line-number)
+    + [`count` – current line number](#count--current-line-number)
     + [`text` – whole text, all lines together](#text--whole-text-all-lines-together)
     + [`lines` – list of lines so far processed](#lines--list-of-lines-so-far-processed)
     + [`numbers` – list of numbers so far processed](#numbers--list-of-numbers-so-far-processed)
@@ -270,8 +270,8 @@ pz "''.join(random.choice(string.ascii_letters) for _ in range(randint(1,30)))" 
 Let's have a stream and output the average value.
 
 ```bash
-# print out current line `counter` and current average `sum/counter`
-$ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=counter, sum/counter' --setup "sum=0"
+# print out current line `count` and current average `sum/count`
+$ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=count, sum/count' --setup "sum=0"
 1, 38.0
 2, 67.0
 3, 62.0
@@ -279,7 +279,7 @@ $ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=count
 
 # print out every 10 000 lines
 # (thanks to `not i % 10000` expression) 
-$ while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/counter; s = (counter,s) if not counter % 10000 else ""' --setup "sum=0"
+$ while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/count; s = (count,s) if not count % 10000 else ""' --setup "sum=0"
 10000, 50.9058
 20000, 50.7344
 30000, 50.693466666666666
@@ -316,7 +316,7 @@ Simulate a lengthy processing by generating a long sequence of numbers (as they 
 On every 100th line, we move cursor up (`\033[1A`), clear line (`\033[K`) and print to `STDERR` current status.  
 
 ```bash
-$ seq 1 100000 | pz 's = f"\033[1A\033[K ... {counter} ..." if counter % 100 == 0 else None ' --stderr 1>/dev/null
+$ seq 1 100000 | pz 's = f"\033[1A\033[K ... {count} ..." if count % 100 == 0 else None ' --stderr 1>/dev/null
  ... 100 ...  # replaced by ... 200 ...
 ```
 
@@ -338,16 +338,16 @@ echo 5 | pz n+2  # 7
 echo 5.2 | pz n+2  # 7.2
 ```
 
-### `counter` – current line number
+### `count` – current line number
 ```bash
 # display every 1_000nth line
-$ pz -g0 n*3 | pz "n if not counter % 1000 else None"
+$ pz -g0 n*3 | pz "n if not count % 1000 else None"
 3000
 6000
 9000
 
 # the same, using the --filter flag
-$ pz -g0 n*3 | pz -F "not counter % 1000"
+$ pz -g0 n*3 | pz -F "not count % 1000"
 ```
 
 ### `text` – whole text, all lines together
@@ -389,7 +389,7 @@ echo -e "hello\nworld" | pz --end lines[-1]  # "world"
 Not available with the `--overflow-safe` flag set.  
 Ex: show current average of the stream. More specifically, we output tuples: `line count, current line, average`.
 ```bash
-$ echo -e "20\n40\n25\n28" | pz 's = counter, s, sum(numbers)/counter'
+$ echo -e "20\n40\n25\n28" | pz 's = count, s, sum(numbers)/count'
 1, 20, 20.0
 2, 40, 30.0
 3, 25, 28.333333333333332
@@ -538,8 +538,8 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     1: row
     2: another row
   
-    # the same using globally available variable `counter` instead of using `--setup` and the `--format` flag
-    $ echo -e "row\nanother row" | pz -f '{counter}: {s}'
+    # the same using globally available variable `count` instead of using `--setup` and the `--format` flag
+    $ echo -e "row\nanother row" | pz -f '{count}: {s}'
     ```
 * `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for the final output.
     The variable `text` is available by default here.
@@ -597,13 +597,14 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     
     bu
     ```
-* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count. If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. If no `main` clause set, the number is piped out. 
+* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count (unless having the `--overflow-safe` flag on while having an infinite generator – in that case, lines will equal to '1'). If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. If no `main` clause set, the number is piped out. 
   ```bash
   $ pz -g2
   1
   2
-  $ pz 'i=i+5' -g -vvv
+  $ pz 'i=i+5' -g -v
   Changing the main clause to: s = i=i+5
+  Generating s = 1 .. 5
   5
   10
   15
@@ -612,7 +613,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   ```
 * `--stderr` Print commands output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
-  $ pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr 
+  $ pz -g=9 s | pz "s = 'Processed next few lines' if count % 3 == 0 else None" --stderr 
   1
   2
   3
@@ -630,7 +631,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   Demonstrate different pipes by writing `STDOUT` to a file and leaving `STDERR` in the terminal. 
 
   ```bash
-  $ pz -g=9 s | pz "s = 'Processed next few lines' if counter % 3 == 0 else None" --stderr > /tmp/example
+  $ pz -g=9 s | pz "s = 'Processed next few lines' if count % 3 == 0 else None" --stderr > /tmp/example
   Processed next few lines
   Processed next few lines
   Processed next few lines

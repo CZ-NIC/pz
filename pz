@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict, Counter
 from collections.abc import Iterable, Callable
 from contextlib import contextmanager
-from itertools import islice, count
+from itertools import islice, count as count_from, repeat
 # noinspection PyUnresolvedReferences
 from math import *
 from re import *
@@ -98,6 +98,8 @@ args = parser.parse_args()
 logger.setLevel(logging.ERROR if args.quiet else (logging.DEBUG if args.verbose else logging.WARNING))
 write_pipe = sys.stderr if args.stderr else sys.stdout
 skip_all = args.zero
+if args.generate and args.n:  # it does not make sense to generate more lines than we plan to process
+    args.generate = min(args.generate, args.n)
 
 # custom functions
 whole_hint_printed = False
@@ -259,8 +261,11 @@ def prepare_command(name):
         cmd = ("skip = not " if args.filter else "s = ") + cmd
 
     # when using the --stderr flag, we pass the original content to the STDOUT
-    if name == "main" and args.stderr and not args.zero:
-        cmd += '\nsys.stdout.write(original_line+"\\n")'
+    if name == "main":
+        if args.stderr and not args.zero:
+            cmd += '\nsys.stdout.write(original_line+"\\n")'
+        if not cmd and not command["end"] and args.generate is not None:
+            cmd = "s"
 
     if original != cmd:  # verbose output
         logger.debug(f"Changing the {name} clause to: {cmd}")
@@ -294,11 +299,8 @@ if __name__ == "__main__":
 
     if not command["main"]:
         if not command["end"]:
-            if args.generate is not None:
-                command["main"] = "s"
-            else:
-                logger.error("You have to specify either main COMMAND or --end COMMAND.")
-                quit()
+            logger.error("You have to specify either main COMMAND or --end COMMAND.")
+            quit()
         else:
             # no main clause specified -> we may limit or turn off processing
             # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
@@ -319,11 +321,13 @@ if __name__ == "__main__":
     text: str
     if args.generate is not None:
         # `--generate=5` → 1,2,3,4,5
-        # `--generate=0` -> 1 .. infinity
-        # When used an infinite generator, it overflows at the end. However, I think the more common use is to profit
-        # from the line number generated than be afraid of the overflow
-        # that can be avoided by: `pz "while True: print(1)" -g1`
-        loop = (str(i) for i in (range(1, args.generate + 1) if args.generate else count(1)))
+        # `--generate=0` → 1 .. infinity
+        # `--generate=0 --overflow_safe` → 1 × infinity
+        loop = (str(i) for i in (range(1, args.generate + 1) if args.generate  # finite generate
+                                 else (repeat(1) if args.overflow_safe else count_from(1))))  # infinite generator
+        logger.debug("Generating s = 1 .. " +
+                     (str(args.generate) if args.generate else ("" if args.overflow_safe else "∞")))
+
         # turn on flushing
         # Ex: it took a lot of time before buffer flushed out when flushing to another pz instance
         #   (and not to the console) in the command: `pz -g0 "s = randint(1,100); sleep(0.01)"  | pz s
@@ -344,12 +348,12 @@ if __name__ == "__main__":
     n = None
     lines: list
     numbers: list
-    counter: int
+    count: int  # itertools.count are imported as count_from ← more common to use this variable over the other
 
     if args.lines:
         lines = []
         numbers = []
-        counter = 0
+        count = 0
 
     # internal processing variables
     tried_to_correct_callable = False
@@ -374,7 +378,7 @@ if __name__ == "__main__":
                 if args.lines:
                     # these variables might be undefined by purpose (and user should not see it)
                     # noinspection PyUnboundLocalVariable
-                    counter += 1
+                    count += 1
                     # noinspection PyUnboundLocalVariable
                     lines.append(s)
                     if n:

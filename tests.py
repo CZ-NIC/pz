@@ -117,6 +117,19 @@ class TestMaster(unittest.TestCase):
 
         return val
 
+    def check(self, raw_cmd, stdout=None, stderr=None):
+        """
+        @param raw_cmd: Will be used as program arguments.
+        @param stdout: Expected stdout output as list of rows
+        @param stderr: Expected stderr output as list of rows
+        """
+        output = Popen(f"pz {raw_cmd} | head -n5", shell=True, stdout=PIPE).communicate()
+
+        # pack the expected value to a byte-string and compare with the process output
+        [self.assertEqual(b"\n".join(str(x).encode() for x in expected) + b"\n", output)
+         for expected, output in zip((stdout, stderr), output)
+         if expected is not None]
+
     def test_delayed_input(self):
         """ Sleep function works, must rend execution longer """
 
@@ -274,7 +287,7 @@ class TestVariables(TestMaster):
     def test_set(self):
         self.go("S.add(s)", "2\n1\n2\n3\n1", end="sorted(S)", expect=["1", "2", "3"])
 
-    def test_counter_object(self):
+    def test_counter(self):
         # unique letters
         self.go("C.update(s)", "one two\nthree four two one", end="len(C)", expect=10)
         # unique words
@@ -283,13 +296,23 @@ class TestVariables(TestMaster):
         self.go("C.update(s.split())", "one two\nthree four two one", end="C.most_common",
                 expect=["one, 2", "two, 2", "three, 1", "four, 1"])
 
-    def test_counter(self):
-        self.go("counter", range(5), expect=[1, 2, 3, 4, 5])
+    def test_count(self):
+        self.go("count", range(5), expect=[1, 2, 3, 4, 5])
 
     def test_generator(self):
         self.go("n", generate="2", expect=["1", "2"])
         self.go("n+2", generate="", expect=["3", "4", "5", "6", "7"])
         self.go("factorial", generate="", expect=["1", "2", "6", "24", "120"])
+
+        # implicitly, we got an increasing list
+        self.check("-g3", [1, 2, 3])
+        self.check("-g3 s", [1, 2, 3])
+        self.check("-g0 s", [1, 2, 3, 4, 5])
+        self.check("-g0", [1, 2, 3, 4, 5])
+        self.check("-g3 --overflow-safe", [1, 2, 3])
+        self.check("-g3 s --overflow-safe", [1, 2, 3])
+        self.check("-g0 --overflow-safe", [1, 1, 1, 1, 1])
+        self.check("-g0 s --overflow-safe", [1, 1, 1, 1, 1])
 
 
 class TestReturnValues(TestMaster):
