@@ -8,7 +8,7 @@ long_description = p.read_text() if p.exists() else None
 
 setup(
     name='pz',
-    version='1.0.0-rc.1',
+    version='1.0.0',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pz',
@@ -19,7 +19,13 @@ setup(
     long_description_content_type="text/markdown",
     scripts=['pz'],
     classifiers=[
-        'Programming Language :: Python :: 3'
+        'Programming Language :: Python :: 3',
+        'Development Status :: 5 - Production/Stable',
+        'Environment :: Console',
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+        'Operating System :: OS Independent',
+        'Topic :: Text Processing',
+        'Topic :: Utilities'
     ],
     python_requires='>=3.6',
 )
