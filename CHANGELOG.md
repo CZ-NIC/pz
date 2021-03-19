@@ -9,6 +9,7 @@
 - command chaining tuned up
 - `--format`, `--stderr`, `--overflow-safe` flags
 - `counter` variable
+- raw bytes support
 
 ## 0.9 (2020-12-02)
 - other modules added for auto-import

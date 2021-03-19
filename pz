@@ -43,6 +43,7 @@ __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it o
            f"\nAvailable variables:"
            f"\n * s – current line"
            f"\n * n – current line converted to an `int` (or `float`) if possible"
+           f"\n * b – current line as a byte-string"
            f"\n * text – whole text, all lines together"
            f"\n * lines – list of lines so far processed"
            f"\n * numbers – list of numbers so far processed"
@@ -326,8 +327,8 @@ if __name__ == "__main__":
         # `--generate=5` → 1,2,3,4,5
         # `--generate=0` → 1 .. infinity
         # `--generate=0 --overflow_safe` → 1 × infinity
-        loop = (str(i) for i in (range(1, args.generate + 1) if args.generate  # finite generate
-                                 else (repeat(1) if args.overflow_safe else count_from(1))))  # infinite generator
+        loop = (str(i).encode() for i in (range(1, args.generate + 1) if args.generate else  # finite generate
+                                          (repeat(1) if args.overflow_safe else count_from(1))))  # infinite generator
         logger.debug("Generating s = 1 .. " +
                      (str(args.generate) if args.generate else ("" if args.overflow_safe else "∞")))
 
@@ -338,16 +339,23 @@ if __name__ == "__main__":
     elif args.whole:
         # fetch whole text
         try:
-            text = sys.stdin.read().rstrip()  # we strip the last newline
+            b = sys.stdin.buffer.read().rstrip()  # we strip the last newline
         except KeyboardInterrupt:
             logger.error("KeyboardInterrupt: Loading `text` interrupted.")
-            text = ""
-        loop = (line for line in text.splitlines()[:args.n])
+            b = b""
+        loop = (line for line in b.splitlines()[:args.n])
+        try:
+            text = b.decode()
+        except UnicodeError:
+            logger.warning(f"Cannot parse the text variable correctly")
+            text = b.decode(errors="replace")
     else:
         # load lines one by one (while taking at most N lines)
-        loop = islice(sys.stdin, args.n)
+        loop = islice(sys.stdin.buffer, args.n)
 
     # filled-in variables available in the user scope
+    b: bytes = None
+    s: str = None
     n = None
     lines: list
     numbers: list
@@ -360,7 +368,7 @@ if __name__ == "__main__":
 
     # internal processing variables
     tried_to_correct_callable = False
-    original_line = s = None
+    original_line: str = None
 
     # run the setup clause
     if args.setup:
@@ -374,7 +382,11 @@ if __name__ == "__main__":
         while True:
             try:
                 try:
-                    original_line = s = next(loop).rstrip()
+                    b = next(loop).rstrip()
+                    original_line = s = b.decode()
+                except UnicodeError:
+                    logger.warning(f"Cannot parse line correctly: {b}")
+                    original_line = s = b.decode(errors="replace")
                 except StopIteration:
                     break
                 n = get_number(s)
@@ -433,7 +445,7 @@ if __name__ == "__main__":
             # to be automatically available at the end – we have everything needed in the `lines` variable.
             text = "\n".join(lines)
 
-        original_line = s = n = None
+        original_line = s = n = b = None
         try:
             while True:
                 with auto_import():

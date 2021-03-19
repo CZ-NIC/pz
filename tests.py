@@ -140,13 +140,18 @@ class TestMaster(unittest.TestCase):
                     continue
                 if isinstance(expected, list):
                     expected = b"\n".join(str(x).encode() for x in expected) + b"\n"
+                if isinstance(expected, str):
+                    expected = expected.encode() + b"\n"
                 self.assertEqual(expected, pipe)
         except AssertionError:
             debug = True
             raise
         finally:
             if debug:
-                s = f"echo {stdin.decode()} | " if stdin else ""
+                try:
+                    s = f"echo {stdin.decode()} | " if stdin else ""
+                except UnicodeError:  # we are piping in non-unicode bytes
+                    s = f"echo -e {stdin} | " if stdin else ""
                 print(f"Checking: {s}pz", raw_cmd,
                       "\nExpected STDOUT:", stdout, "\nExpected STDERR:", stderr, "\nOutput:", output)
 
@@ -338,6 +343,11 @@ class TestVariables(TestMaster):
                                                                      ("-g -1", [1]),
                                                                      ("-g -n2", [1, 2])
                                                                      )]
+
+    def test_bytes(self):
+        stdin, stdout = b'hello\n\x80invalid\nworld', ["hello", "€invalid", "world"]
+        self.check("'b.decode(\"1250\")'", stdout, r"Cannot parse line correctly: b'\x80invalid'", stdin)
+        self.check("'b.decode(\"1250\")' -q", stdout, False, stdin)
 
 
 class TestReturnValues(TestMaster):

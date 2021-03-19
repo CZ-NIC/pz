@@ -33,6 +33,7 @@ wikipedia.com
   * [Scope variables](#scope-variables)
     + [`s` – current line](#s--current-line)
     + [`n` – current line converted to an `int` (or `float`) if possible](#n--current-line-converted-to-an-int-or-float-if-possible)
+    + [`b` – current line as a byte-string](#b--current-line-as-a-byte-string)
     + [`count` – current line number](#count--current-line-number)
     + [`text` – whole text, all lines together](#text--whole-text-all-lines-together)
     + [`lines` – list of lines so far processed](#lines--list-of-lines-so-far-processed)
@@ -336,6 +337,18 @@ echo 5 | pz 's += "4"'  # 54
 ```bash
 echo 5 | pz n+2  # 7
 echo 5.2 | pz n+2  # 7.2
+```
+
+### `b` – current line as a byte-string
+Sometimes the input cannot be converted to str easily. A warning is output, however, you can still operate with raw bytes.
+```bash
+echo -e '\x80 invalid line' | pz s
+Cannot parse line correctly: b'\x80 invalid line'
+� invalid line
+
+# use the `--quiet` flag to suppress the warning, then decode the bytes
+echo -e '\x80 invalid line' | pz 'b.decode("cp1250")' --quiet
+€ invalid line
 ```
 
 ### `count` – current line number
