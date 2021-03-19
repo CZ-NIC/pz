@@ -117,18 +117,38 @@ class TestMaster(unittest.TestCase):
 
         return val
 
-    def check(self, raw_cmd, stdout=None, stderr=None):
+    def check(self, raw_cmd, stdout=None, stderr=None, stdin: bytes = None, debug=False):
         """
-        @param raw_cmd: Will be used as program arguments.
-        @param stdout: Expected stdout output as list of rows
-        @param stderr: Expected stderr output as list of rows
-        """
-        output = Popen(f"pz {raw_cmd} | head -n5", shell=True, stdout=PIPE).communicate()
+        @param raw_cmd: Will be used as program arguments
+        @param stdout: Expected output
+        @param stderr: Expected output
+        @param stdin: Bytes input
+        @param debug: Boolean
 
-        # pack the expected value to a byte-string and compare with the process output
-        [self.assertEqual(b"\n".join(str(x).encode() for x in expected) + b"\n", output)
-         for expected, output in zip((stdout, stderr), output)
-         if expected is not None]
+        Expected output:
+            * bytes or list of rows
+            * False to expect empty
+            * None to not check
+        """
+        output = Popen(f"./pz {raw_cmd}", shell=True, stdout=PIPE, stderr=PIPE, stdin=PIPE).communicate(stdin)
+
+        try:
+            # pack the expected value to a byte-string and compare with the process output
+            for expected, pipe in zip((stdout, stderr), output):
+                if expected is None or (not expected and not pipe):
+                    # output not checked or output empty as expected
+                    continue
+                if isinstance(expected, list):
+                    expected = b"\n".join(str(x).encode() for x in expected) + b"\n"
+                self.assertEqual(expected, pipe)
+        except AssertionError:
+            debug = True
+            raise
+        finally:
+            if debug:
+                s = f"echo {stdin.decode()} | " if stdin else ""
+                print(f"Checking: {s}pz", raw_cmd,
+                      "\nExpected STDOUT:", stdout, "\nExpected STDERR:", stderr, "\nOutput:", output)
 
     def test_delayed_input(self):
         """ Sleep function works, must rend execution longer """
@@ -231,22 +251,24 @@ class TestFlags(TestMaster):
     def test_stderr(self):
         """ When using --stderr flag, the contents piped to STDOUT must stay intact. """
 
-        def _test(cmd):
-            return Popen(["./pz", "--end", "'end'"] + cmd, stdout=PIPE, stdin=PIPE, stderr=PIPE).communicate(b"1")
+        # check behaviour with the end clause
+        [self.check(f"{cmd} --end \"'end'\"", stdout, stderr, b"1") for cmd, stdout, stderr in (
+            ("s", [1, "end"], b""),
+            ("s --stderr", [1], [1, "end"]),
+            ("n+2 --stderr", [1], [3, "end"]),
+            ("--stderr", [1], ["end"]),
+            ("n+2 --stderr -0", False, ["end"]),  # -0 will suppress both the STDOUT and the STDERR main clause output
+            ("--stderr -0", False, ["end"]),
+        )]
 
-        self.assertEqual((b'1\nend\n', b''), _test(["s"]))
-        self.assertEqual((b'1\n', b'1\nend\n'), _test(["s", "--stderr"]))
-        self.assertEqual((b'1\n', b'3\nend\n'), _test(["n+2", "--stderr"]))
+        # check behaviour without the end clause
+        [self.check(*x, b"1") for x in (
+            ("--stderr s", [1], [1]),
+            ("--stderr", b"", b"You have to specify either main COMMAND or --end COMMAND.\n")
+        )]
 
 
 class TestVariables(TestMaster):
-    # # deprecated
-    # def test_lines(self):
-    #     """ Possibility to use `lines` list instead of re-assigning `line`. """
-    #     self.assertListEqual(['5'] * 4, self.go(r"lines.append(5)", LOREM))
-    #
-    #     self.assertListEqual(['http://example.com', 'https://example.org', 'http://nic.cz'],
-    #                          self.go(r"lines.extend(search(r'(https?://[^\s]+)', line).groups())", LOREM))
 
     def test_text(self):
         """ Access to the `text` variable in the main clause depends on the `--whole` flag. """
@@ -304,15 +326,18 @@ class TestVariables(TestMaster):
         self.go("n+2", generate="", expect=["3", "4", "5", "6", "7"])
         self.go("factorial", generate="", expect=["1", "2", "6", "24", "120"])
 
-        # implicitly, we got an increasing list
-        self.check("-g3", [1, 2, 3])
-        self.check("-g3 s", [1, 2, 3])
-        self.check("-g0 s", [1, 2, 3, 4, 5])
-        self.check("-g0", [1, 2, 3, 4, 5])
-        self.check("-g3 --overflow-safe", [1, 2, 3])
-        self.check("-g3 s --overflow-safe", [1, 2, 3])
-        self.check("-g0 --overflow-safe", [1, 1, 1, 1, 1])
-        self.check("-g0 s --overflow-safe", [1, 1, 1, 1, 1])
+        [self.check(cmd + " | head -n5", stdout) for cmd, stdout in (("-g3", [1, 2, 3]),
+                                                                     ("-g3 s", [1, 2, 3]),
+                                                                     ("-g0 s", [1, 2, 3, 4, 5]),
+                                                                     ("-g0", [1, 2, 3, 4, 5]),
+                                                                     ("-g3 --overflow-safe", [1, 2, 3]),
+                                                                     ("-g3 s --overflow-safe", [1, 2, 3]),
+                                                                     ("-g0 --overflow-safe", [1, 1, 1, 1, 1]),
+                                                                     ("-g0 s --overflow-safe", [1, 1, 1, 1, 1]),
+                                                                     ("-g10", [1, 2, 3, 4, 5]),
+                                                                     ("-g -1", [1]),
+                                                                     ("-g -n2", [1, 2])
+                                                                     )]
 
 
 class TestReturnValues(TestMaster):

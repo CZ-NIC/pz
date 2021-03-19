@@ -260,19 +260,30 @@ def prepare_command(name):
         # "if s == 1: print(s)" - will not pass
         cmd = ("skip = not " if args.filter else "s = ") + cmd
 
-    # when using the --stderr flag, we pass the original content to the STDOUT
     if name == "main":
-        if args.stderr and not args.zero:
-            cmd += '\nsys.stdout.write(original_line+"\\n")'
-        if not cmd and not command["end"] and args.generate is not None:
-            cmd = "s"
+        if not cmd and args.generate is not None:
+            cmd = "# generator"  # force args.run to be True by having a command
+        if args.stderr:
+            if not cmd:
+                # it is not intended to pipe everything to STDERR while everything is piped unchanged to STDOUT too
+                cmd = 's = None'
+            if not args.zero:  # when using the --stderr flag, we pass the original content to the STDOUT
+                cmd += '\nsys.stdout.write(original_line+"\\n")'
 
     if original != cmd:  # verbose output
-        logger.debug(f"Changing the {name} clause to: {cmd}")
+        logger.debug(f"Changing the {name} clause to: {cmd.strip()}")
     command[name] = cmd
 
 
 if __name__ == "__main__":
+    # determine args.run and possibly turn on args.lines
+    args.run = True  # True = run whole processing (output), 1 = partial run (populate `lines`), False = do not run
+    args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
+
+    if all(x is None for x in (args.main, args.end, args.generate)):
+        logger.error("You have to specify either main COMMAND or --end COMMAND.")
+        quit()
+
     # prepare commands (prepend `line =` if needed)
     command = {"main": "", "end": ""}
     regular_command = None  # prepare regular modifications
@@ -293,19 +304,11 @@ if __name__ == "__main__":
             regular_command = lambda line: reg_ex.sub(args.sub, line)
     [prepare_command(name) for name in command]
 
-    # determine args.run and possibly turn on args.lines and args.text
-    args.run = True  # True = run whole processing, 1 = partial run, False = do not run
-    args.lines = not args.overflow_safe  # whether to populate variables like: `lines`, `numbers`
-
     if not command["main"]:
-        if not command["end"]:
-            logger.error("You have to specify either main COMMAND or --end COMMAND.")
-            quit()
-        else:
-            # no main clause specified -> we may limit or turn off processing
-            # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
-            # running can be skipped or at least run partially to fill `lines`
-            args.run = False if args.overflow_safe else 1
+        # no main clause specified -> we may limit or turn off processing (and output)
+        # if the user needs the program to pipe out continuously, they might want to use `s` as the main clause
+        # running can be skipped or at least run partially to fill `lines`
+        args.run = False if args.overflow_safe else 1
 
     # empty variables available in the user scope
     i = 0
@@ -411,7 +414,7 @@ if __name__ == "__main__":
                 # ex: process we pipe into is killed
                 # There is a chance we want to pipe something to the STDERR in the --end clause, hence we do not quit.
                 s = args.main if regular_command else command['main']
-                logger.error(f"BrokenPipeError: No output pipe when processing the main clause '{s}'")
+                logger.debug(f"BrokenPipeError: No output pipe when processing the main clause '{s}'")
                 break
             except KeyboardInterrupt:  # useful for ending up an infinite generator
                 # Break but continue when SIGINT caught in case we have an END clause.
@@ -438,7 +441,7 @@ if __name__ == "__main__":
                     output(s, True)
                     break
         except BrokenPipeError:
-            logger.error(f"BrokenPipeError: No output pipe in the --end clause '{command['end']}'")
+            logger.debug(f"BrokenPipeError: No output pipe in the --end clause '{command['end']}'")
         except Exception as exc:
             logger.warning(f'Exception: {type(exc)} {exc} in the --end clause')
 

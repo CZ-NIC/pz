@@ -260,7 +260,7 @@ Using `pz`, we relieve the cycle handling and importing burden from the command.
 pz "randint(1,100)" --generate=0
 ```
 
-Let's generate few random strings of variable length 1 to 30. When generator flag is used without number, it cycles five times.
+Let's generate few random strings of variable length 1 to 30. When generator flag is used without a number, it cycles five times.
 ```bash
 pz "''.join(random.choice(string.ascii_letters) for _ in range(randint(1,30)))" -S "import string" -g
 ``` 
@@ -346,7 +346,7 @@ $ pz -g0 n*3 | pz "n if not count % 1000 else None"
 6000
 9000
 
-# the same, using the --filter flag
+# the same, using the `--filter` flag
 $ pz -g0 n*3 | pz -F "not count % 1000"
 ```
 
@@ -582,9 +582,9 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
 
 
 ### Input / output  
-* `-n NUM`: Process only such number of lines. Roughly equivalent to `head -n`.
-* `-1`: Process just the first line.
-* `-0`: Skip all lines output. (Useful in combination with `--end`.)
+* `-n NUM` Process only such number of lines. Roughly equivalent to `head -n`.
+* `-1` Process just the first line.
+* `-0` Skip all lines output. (Useful in combination with `--end`.)
 * `--empty` Output even empty lines. (By default skipped.)  
     Consider shortening the text by 3 last letters. First line `hey` disappears completely then.
     ```bash
@@ -597,7 +597,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     
     bu
     ```
-* `-g [NUM]`, `--generate [NUM]`: Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count (unless having the `--overflow-safe` flag on while having an infinite generator – in that case, lines will equal to '1'). If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. If no `main` clause set, the number is piped out. 
+* `-g [NUM]`, `--generate [NUM]` Generate lines while ignoring the input pipe. Line will correspond to the iteration cycle count (unless having the `--overflow-safe` flag on while having an infinite generator – in that case, lines will equal to '1'). If `NUM` not specified, 5 lines will be produced by default. Putting `NUM == 0` means an infinite generator. If no `main` clause set, the number is piped out. 
   ```bash
   $ pz -g2
   1
@@ -611,7 +611,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   20
   25
   ```
-* `--stderr` Print commands output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
+* `--stderr` Print clauses' output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
   $ pz -g=9 s | pz "s = 'Processed next few lines' if count % 3 == 0 else None" --stderr 
   1
@@ -655,15 +655,15 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   ```
 
 ### Regular expressions shortcuts
-* `--search`: Equivalent to `search(COMMAND, s)`
+* `--search` Equivalent to `search(COMMAND, s)`
     ```bash
     $ echo -e "hello world\nanother words" | pz --search ".*\s"
     hello
     another
     ```
-* `--match`: Equivalent to `match(COMMAND, s)`
-* `--findall`: Equivalent to `findall(COMMAND, s)`
-* `--sub SUBSTITUTION`: Equivalent to `sub(COMMAND, SUBSTITUTION, s)`
+* `--match` Equivalent to `match(COMMAND, s)`
+* `--findall` Equivalent to `findall(COMMAND, s)`
+* `--sub SUBSTITUTION` Equivalent to `sub(COMMAND, SUBSTITUTION, s)`
     ```bash
     $ echo -e "hello world\nanother words" | pz ".*\s" --sub ":"
     :world
