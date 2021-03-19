@@ -46,6 +46,7 @@ wikipedia.com
     + [Command clauses](#command-clauses)
     + [Input / output](#input--output)
     + [Regular expressions shortcuts](#regular-expressions-shortcuts)
+    + [Bash completion](#bash-completion)
 
 # Installation
 Install with a single command from [PyPi](https://pypi.org/project/pz/).
@@ -689,3 +690,8 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     helloworld
     anotherwords
     ```
+
+### Bash completion
+1. Run: `apt-get install bash-completion jq`
+2. Copy: [extra/pz-autocompletion.bash](./extra/pz-autocompletion.bash) to `/etc/bash_completion.d/`
+3. Restart terminal
