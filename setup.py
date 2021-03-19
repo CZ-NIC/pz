@@ -19,7 +19,13 @@ setup(
     long_description_content_type="text/markdown",
     scripts=['pz'],
     classifiers=[
-        'Programming Language :: Python :: 3'
+        'Programming Language :: Python :: 3',
+        'Development Status :: 5 - Production/Stable',
+        'Environment :: Console',
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+        'Operating System :: OS Independent',
+        'Topic :: Text Processing',
+        'Topic :: Utilities'
     ],
     python_requires='>=3.6',
 )
