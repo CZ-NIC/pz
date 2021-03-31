@@ -65,8 +65,10 @@ How does your data look when pythonized via `pz`? Which Bash programs may the ut
 Just use the `[:]` notation.
 
 ```bash
-echo "hello world" | pz s[6:]  # hello
+echo "hello world" | pz s[6:]  # world
 ```
+
+<sub>Note that suppressing quotes around the argument may not work (Zsh) or lead to an unexpected behaviour: `touch s1 && echo "hello" | pz s[1]` → `Exception: <class 'NameError'>`. Use `echo "hello" | pz 's[1]'` instead.</sub>
 
 ## Prepend to every line in a stream
 
