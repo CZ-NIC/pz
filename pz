@@ -44,6 +44,7 @@ __doc__ = (f"Launch your tiny Python script on a piped in contents and pipe it o
            f"\n * s – current line"
            f"\n * n – current line converted to an `int` (or `float`) if possible"
            f"\n * b – current line as a byte-string"
+           f"\n * count – current line number"           
            f"\n * text – whole text, all lines together"
            f"\n * lines – list of lines so far processed"
            f"\n * numbers – list of numbers so far processed"
@@ -74,8 +75,7 @@ group2.add_argument("-w", "--whole", help='Wait till whole text fetched and then
 
 group3 = parser.add_argument_group("Input / output")
 group3.add_argument("-n", help='Process only such number of lines.', type=int, metavar="NUM")
-group3.add_argument("-1", help='Process just first line. Useful in combination with --text.'
-                               ' You may want to add -1 flag.', action='store_const', dest="n", const=1)
+group3.add_argument("-1", help='Process just first line.', action='store_const', dest="n", const=1)
 group3.add_argument("-0", help='Skip all lines output. (Useful in combination with --end.)', action='store_true',
                     dest="zero")
 group3.add_argument("--empty", help='Output empty lines. (By default skipped.)', action='store_true')
@@ -83,8 +83,8 @@ group3.add_argument("-g", "--generate", help='Generate lines while ignoring the 
                                              ' Line will correspond to the iteration cycle count.'
                                              ' By default `NUM=5`; `NUM=0` means infinity.',
                     nargs="?", type=int, metavar="NUM", const=5)
-group3.add_argument("--stderr", help='Print commands output to the STDERR,'
-                                     ' while letting the original line piped to STDOUT intact.', action='store_true')
+group3.add_argument("--stderr", help='Print commands output to the STDERR, while letting the original line'
+                                     ' piped to the STDOUT intact.', action='store_true')
 group3.add_argument("--overflow-safe", help='Prevent `lines`, `numbers`, `text` variables to be available.'
                                             ' Useful when handling an infinite input.', action='store_true')
 
@@ -175,7 +175,7 @@ def output(line, final_round=None):
         elif isinstance(line, list):  # list is output as multiple lines
             [output(el) for el in line]
         elif isinstance(line, Iterable):  # tuple or generator (but not a string) gets joined
-            write(", ".join(str(el) for el in line))
+            write("\t".join(str(el) for el in line))
         elif isinstance(line, Callable):  # tuple or generator (but not a string) gets joined
             try:
                 output(line())
@@ -352,6 +352,24 @@ if __name__ == "__main__":
     else:
         # load lines one by one (while taking at most N lines)
         loop = islice(sys.stdin.buffer, args.n)
+
+    # if True:
+    #     # XXX Viz _bug/flag_files
+    #     # XXX Tyhle řádky berou vstup jako soubory a zavadi promennou file, kde je Path daného souboru.
+    #     from pathlib import Path # import later – speeding up
+    #     file = None
+    #
+    #     def cat_file(files):
+    #         global file
+    #         for f in files:
+    #             f = Path(f.decode().rstrip())
+    #             if not f.is_file():
+    #                 continue
+    #             file = f
+    #             for line in f.read_bytes().splitlines():
+    #                 yield line
+    #
+    #     loop = cat_file(loop)
 
     # filled-in variables available in the user scope
     b: bytes = None

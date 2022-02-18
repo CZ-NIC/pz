@@ -165,9 +165,9 @@ echo -e "red green\nblue red green" | pz 'S.update(s.split())' --end 'len(S)'  #
 But what if we want to get the most common words and the count of its usages? Let's use `C`, a global instance of the `collections.Counter`. We see then the `red` is the most_common word and has been used 2 times.
 ```bash
 $ echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_common
-red, 2
-green, 2
-blue, 1
+red	2
+green	2
+blue	1
 ```
 
 ## Fetching web content
@@ -276,27 +276,27 @@ Let's have a stream and output the average value.
 ```bash
 # print out current line `count` and current average `sum/count`
 $ while :; do echo $((1 + $RANDOM % 100)) ; sleep 0.1; done | pz 'sum+=n;s=count, sum/count' --setup "sum=0"
-1, 38.0
-2, 67.0
-3, 62.0
-4, 49.75
+1	38.0
+2	67.0
+3	62.0
+4	49.75
 
 # print out every 10 000 lines
 # (thanks to `not i % 10000` expression) 
 $ while :; do echo $((1 + $RANDOM % 100)) ;  done | pz 'sum+=n;s=sum/count; s = (count,s) if not count % 10000 else ""' --setup "sum=0"
-10000, 50.9058
-20000, 50.7344
-30000, 50.693466666666666
-40000, 50.5904
+10000	50.9058
+20000	50.7344
+30000	50.693466666666666
+40000	50.5904
 ```
 
 How can this be simplified? Let's use an infinite generator `-g0`. As we know, `n` is given current line number by the generator and `i` is by default implicitly declared to `i=0` so we use it to hold the sum. No setup clause needed. No Bash cycle needed. 
 ```bash
 $ pz "i+=randint(1,100); s = (n,i/n) if not n % 10000 else ''" -g0
-10000, 49.9488
-20000, 50.5399
-30000, 50.39906666666667
-40000, 50.494425
+10000	49.9488
+20000	50.5399
+30000	50.39906666666667
+40000	50.494425
 ```
 
 ## Multiline statements
@@ -406,10 +406,10 @@ Not available with the `--overflow-safe` flag set.
 Ex: show current average of the stream. More specifically, we output tuples: `line count, current line, average`.
 ```bash
 $ echo -e "20\n40\n25\n28" | pz 's = count, s, sum(numbers)/count'
-1, 20, 20.0
-2, 40, 30.0
-3, 25, 28.333333333333332
-4, 28, 28.25
+1	20	20.0
+2	40	30.0
+3	25	28.333333333333332
+4	28	28.25
 ```
 
 ### `skip` line
@@ -451,8 +451,8 @@ Caveat: When accessed first time, the auto-import makes the row reprocessed. It 
 ```bash
 $ echo -e "hey\nbuddy" | pz 'a+=1; sleep(1); b+=1; s = a,b ' --setup "a=0;b=0;" -v
 Importing sleep from time
-2, 1
-3, 2
+2	1
+3	2
 ```
 As seen, `a` was incremented 3× times and `b` on twice because we had to process the first line twice in order to auto-import sleep. In the first run, the processing raised an exception because `sleep` was not known. To prevent that, explicitly appending `from time import sleep` to the `--setup` flag would do. 
 
@@ -467,17 +467,17 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```bash
     echo "5" | pz 'len(s)'  # 1 (command internally changed to `s = len(s)`)
     ```
-* Tuple, generator: If `s` ends up as a tuple, its get joined by spaces.
+* Tuple, generator: If `s` ends up as a tuple, its get joined by tabs.
     ```bash
     $ echo "5" | pz 's, len(s)'
-    5, 1 
+    5	1 
     ```
   
     Consider piping two lines 'hey' and 'buddy'. We return three elements, original text, reversed text and its length.
     ```bash
     $ echo -e "hey\nbuddy" | pz 's,s[::-1],len(s)' 
-    hey, yeh, 3
-    buddy, yddub, 5
+    hey	yeh	3
+    buddy	yddub	5
     ```
 * List: When `s` ends up as a list, its elements are printed to independent lines.
     ```bash
@@ -494,7 +494,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     echo "hello world" | pz 'search(r"\s(.*)", s)' # "world"
   
     # matched groups treated as tuple
-    echo "hello world" | pz 'search(r"(.*)\s(.*)", s)'  # "hello, world"
+    echo "hello world" | pz 'search(r"(.*)\s(.*)", s)'  # "hello	world"
     ```
 * Callable: It gets called. Very useful when handling simple function – without the need of explicitly putting parenthesis to call the function, we can omit quoting in Bash (expression `s.lower()` would have had to be quoted.) Use the verbose flag `-v` to inspect the internal change of the command.
     ```bash
@@ -627,7 +627,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   20
   25
   ```
-* `--stderr` Print clauses' output to the `STDERR`, while letting the original line piped to `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
+* `--stderr` Print clauses' output to the `STDERR`, while letting the original line piped to the `STDOUT` intact. Useful for generating reports during a long operation. Take a look at the following example, every third line will make `STDERR` to receive a message. 
   ```bash
   $ pz -g=9 s | pz "s = 'Processed next few lines' if count % 3 == 0 else None" --stderr 
   1

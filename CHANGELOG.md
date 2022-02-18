@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 1.0.0
+## 1.1.0 (unreleased)
+- CHANGED: tuple output delimited by a tab instead of ', '
+
+## 1.0.0 (2021-03-19)
 - CHANGED: `--end` clause renamed from `--finally`
 - auto-importing works in the `--setup` clause
 - will not internally change commands starting with a reserved keyword (ex: `if s ==` will not be changed to `s = if s ===`)

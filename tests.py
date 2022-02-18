@@ -321,7 +321,7 @@ class TestVariables(TestMaster):
         self.go("C.update(s.split())", "one two\nthree four two one", end="len(C)", expect=4)
         # most common
         self.go("C.update(s.split())", "one two\nthree four two one", end="C.most_common",
-                expect=["one, 2", "two, 2", "three, 1", "four, 1"])
+                expect=["one\t2", "two\t2", "three\t1", "four\t1"])
 
     def test_count(self):
         self.go("count", range(5), expect=[1, 2, 3, 4, 5])
@@ -414,7 +414,7 @@ class TestReturnValues(TestMaster):
         self.go("[1,2,3]", "hi", expect=["1", "2", "3"])
 
     def test_tuple(self):
-        self.go("(1,2,3)", "hi", expect="1, 2, 3")
+        self.go("(1,2,3)", "hi", expect="1\t2\t3")
 
     def test_match_output(self):
         """ When outputting a regular expression, we use its groups or the matched portion of the string"""
@@ -425,8 +425,8 @@ class TestReturnValues(TestMaster):
         self.go(r"\s(.*)", "hello world", custom_cmd="--search", expect="world")
         self.go(r'search(r"\s(.*)", s)', "hello world", expect="world")
 
-        self.go(r"(.*)\s(.*)", "hello world", custom_cmd="--search", expect="hello, world")
-        self.go(r'search(r"(.*)\s(.*)", s)', "hello world", expect="hello, world")
+        self.go(r"(.*)\s(.*)", "hello world", custom_cmd="--search", expect="hello\tworld")
+        self.go(r'search(r"(.*)\s(.*)", s)', "hello world", expect="hello\tworld")
 
         # outputs the group 1
         self.go('search(r"""([^1])""", s)', "1a\n2b\n3c", expect=["a", "2", "3"])
@@ -448,7 +448,7 @@ class TestReturnValues(TestMaster):
     def test_regular_commands(self):
         """ You can use ex: --match instead of `s = match(..., s)` """
         self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--match",
-                expect=["hello, world", "another, words"])
+                expect=["hello\tworld", "another\twords"])
 
         self.go(r"([^\s]*)", "hello world\nanother words", custom_cmd="--match", expect=["hello", "another"])
         self.go(r"([^\s]*)", "hello world\nanother words", custom_cmd="--findall",
@@ -466,7 +466,7 @@ class TestReturnValues(TestMaster):
         # (hello, world)
         # (another, words)
         self.go(r"(.*)\s(.*)", "hello world\nanother words", custom_cmd="--findall",
-                expect=["hello, world", "another, words"])
+                expect=["hello\tworld", "another\twords"])
 
     def test_bytes(self):
         """ Raw output possible (not in the Python format b'string')
