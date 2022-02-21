@@ -249,7 +249,9 @@ def prepare_command(name):
         # prepending `line = ` is not needed, the string is treated as a `match` parameter
         pass
     elif (len(cmd.splitlines()) == 1  # check if there is only a single line with a missing assignment
-          and not search(r"(s|skip)\s?[^=]?=[^=]", cmd)  # ex: `s = s+= 1` would fail
+          # filter out, if any of 3 string assignment operators is already there
+          and not search(r"(s|skip)\s*=[^=]", cmd)  # ex: `s = s = 1` would be redundant (but do fill `s = s == 1`)
+          and not search(r"(s|skip)\s*[+*]=", cmd)  # ex: `s = s += 1` and `s = s *= 1` would fail
           # do not assign to reserved keywords (ex: `s = if s == 1: ...` would fail)
           and not any(cmd.lstrip().startswith(keyword) for keyword in ("if", "while", "for"))
           and ";" not in cmd
@@ -352,24 +354,6 @@ if __name__ == "__main__":
     else:
         # load lines one by one (while taking at most N lines)
         loop = islice(sys.stdin.buffer, args.n)
-
-    # if True:
-    #     # XXX Viz _bug/flag_files
-    #     # XXX Tyhle řádky berou vstup jako soubory a zavadi promennou file, kde je Path daného souboru.
-    #     from pathlib import Path # import later – speeding up
-    #     file = None
-    #
-    #     def cat_file(files):
-    #         global file
-    #         for f in files:
-    #             f = Path(f.decode().rstrip())
-    #             if not f.is_file():
-    #                 continue
-    #             file = f
-    #             for line in f.read_bytes().splitlines():
-    #                 yield line
-    #
-    #     loop = cat_file(loop)
 
     # filled-in variables available in the user scope
     b: bytes = None

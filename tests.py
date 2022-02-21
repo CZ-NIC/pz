@@ -377,6 +377,24 @@ class TestReturnValues(TestMaster):
         """ `s = ` is prepended, we do not get confused if '==' has already been present """
         self.assertEqual(['True'], self.go(self.col2 + ' == "Jamaica"', CSV))
 
+    def test_assignment(self):
+        three = "3\n2\n1"
+        self.go("s == 'abc'", "abc", expect="True")
+        self.go("s = s == 'abc'", "abc", expect="True")
+        self.go("s = n + 2", "3", expect=5)
+        self.go("s != '2'", three, expect=["True", "True"])
+        self.go("n = n + 2", "3", expect=5)
+        # since `s` variable is not changed, following should raise an exception:
+        self.go("n += 2", "3", expect="Exception: <class 'SyntaxError'> invalid syntax (<string>, line 1) on line: 3")
+        self.go("skip = n == 2", three, expect=[3, 1])
+        self.go("n != 2", "2", expect=[])
+        self.go("n != 2", three, expect=["True", "True"])
+        self.go("n != 2", three, empty=True, expect=["True", "False", "True"])
+
+        self.go("s += 'a'", three, expect=["3a", "2a", "1a"])
+        self.go("s*=2", three, expect=[33, 22, 11])
+        self.go("n - 1", three, expect=[2, 1, 0])
+
     def test_wrong_command(self):
         """ the command is wrong and does nothing since there are both '=' and ';', the line will not change """
         self.assertListEqual(CSV.splitlines(), self.go_csv('a=1;' + self.col2))
