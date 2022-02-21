@@ -1,5 +1,5 @@
 # pz
-[![Build Status](https://travis-ci.org/CZ-NIC/pz.svg?branch=main)](https://travis-ci.org/CZ-NIC/pz)
+[![Build Status](https://github.com/CZ-NIC/pz/actions/workflows/run-unittest.yml/badge.svg)](https://github.com/CZ-NIC/pz/actions) 
 [![Downloads](https://pepy.tech/badge/pz)](https://pepy.tech/project/pz)
 
 Ever wished to use Python in Bash? Would you choose the Python syntax over `sed`, `awk`, ...? Should you exactly know what command would you use in Python, but you end up querying `man` again and again, read further. The utility allows you to *pythonize* the shell: to pipe arbitrary contents through `pz`, loaded with your tiny Python script.
