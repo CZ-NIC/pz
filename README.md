@@ -16,11 +16,13 @@ wikipedia.com
   * [Extract a substring](#extract-a-substring)
   * [Prepend to every line in a stream](#prepend-to-every-line-in-a-stream)
   * [Converting to uppercase](#converting-to-uppercase)
+  * [Reversing lines](#reversing-lines)
   * [Parsing numbers](#parsing-numbers)
   * [Find out all URLs in a text](#find-out-all-urls-in-a-text)
   * [Sum numbers](#sum-numbers)
   * [Keep unique lines](#keep-unique-lines)
   * [Counting words](#counting-words)
+  * [Aggregating suffixes in a directory](#aggregating-suffixes-in-a-directory)
   * [Fetching web content](#fetching-web-content)
   * [Handling nested quotes](#handling-nested-quotes)
   * [Computing factorial](#computing-factorial)
@@ -89,6 +91,18 @@ Replacing `| tr '[:upper:]' '[:lower:]'`.
 ```bash
 echo "HELLO" | pz s.lower  # "hello"
 ```
+
+## Reversing lines
+
+Replacing `| tac` or `| tail -r` (on some systems only) or `| sed '1!G;h;$!d'` (for cool guys only)
+
+``` bash
+$ echo -e "1\n2\n3" | pz -E 'lines[::-1]'
+3
+2
+1
+```
+
 ## Parsing numbers
 
 Replacing `cut`. Note you can chain multiple `pz` calls. Split by a comma '`,`', then use `n` to access the line converted to a number. 
@@ -168,6 +182,19 @@ $ echo -e "red green\nblue red green" | pz 'C.update(s.split())' --end C.most_co
 red	2
 green	2
 blue	1
+```
+
+## Aggregating suffixes in a directory
+
+To get a quick notion about the number of file extensions dwelling on a path, firstly convert file names to the suffixes. Then, feed them to the `collections.Counter` constructor.
+
+```bash
+$ ls
+a.txt  b.txt  c.txt  v1.mp4  v2.mp4
+
+$ ls | pz 'Path(s).suffix' | pz --end 'Counter(lines).most_common' 
+.txt	3
+.mp4	2
 ```
 
 ## Fetching web content
