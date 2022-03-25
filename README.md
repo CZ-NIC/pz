@@ -467,7 +467,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     ```bash
     echo "5" | pz 'len(s)'  # 1 (command internally changed to `s = len(s)`)
     ```
-* Tuple, generator: If `s` ends up as a tuple, its get joined by tabs.
+* Tuple, generator: If `s` ends up as a tuple, it gets joined by tabs.
     ```bash
     $ echo "5" | pz 's, len(s)'
     5	1 
@@ -563,17 +563,17 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     $ echo -e "1\n2\n3\n4" | pz --end sum
     10
     $ echo -e "1\n2\n3\n4" | pz s --end sum
-    1
+    1  # output of the `main` clause
     2
     3
     4
-    10  
+    10  # output of the `end` clause
     $ echo -e "1\n2\n3\n4" | pz sum --end sum
-    1
+    1  # output of the `main` clause
     3
     6
     10
-    10
+    10  # output of the `end` clause
     ```
 * `-F`, `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
@@ -662,7 +662,7 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   ```
   # prevent `text` to be populated by default
   echo -e  "1\n2\n2\n3" | pz --end "len(text)" --overflow-safe
-  Did you not forget to use --while to access `text`?
+  Did you not forget to use --whole to access `text`?
   Exception: <class 'NameError'> name 'text' is not defined in the --end clause
   
   # force to populate `text` 

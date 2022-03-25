@@ -416,7 +416,37 @@ class TestReturnValues(TestMaster):
         self.go("sum", num, end="sum", expect=["1", "3", "6", "10", "10"])
         self.go("n", num, end="sum", expect=["1", "2", "3", "4", "10"])
         self.go("1", num, end="sum", expect=["1", "1", "1", "1", "10"])
+        self.go("", "1\n2\n3\n0\ninvalid\n4", end="sum(numbers)", expect=["10"])
+        self.go("", "1\n2\n3\n0\ninvalid\n4", end="sum",
+                expect="Exception: <class 'TypeError'> sum() takes at least 1 positional argument (0 given)"
+                       " in the --end clause")
+
+        # Why are following statements same, why both expect the same list `["1 - 2 - 3 - 4"]`?
+        # Consider POSIX text files should end with a new line.
+        # def cmd(c, t):
+        #     print(Popen(c, shell=True,stdout=PIPE, stdin=PIPE).communicate(input=t.encode("utf-8"))[0])
+        # [cmd("cat", x) for x in ("1\n2\n3", "1\n2\n3\n")] # [b'1\n2\n3', b'1\n2\n3\n']
+        # [cmd("xargs echo", x) for x in ("1\n2\n3", "1\n2\n3\n")] # same b'1 2 3\n'
+        # [cmd("pz -E 'tuple(lines)'", x) for x in ("1\n2\n3", "1\n2\n3\n")] # same b'1\t2\t3\n'
         self.go("", num, end="' - '.join", expect=["1 - 2 - 3 - 4"])
+        self.go("", num + "\n", end="' - '.join", expect=["1 - 2 - 3 - 4"])
+
+        # sums with zeroes
+        self.go("", "1\n2\n0\n4", end="sum", expect=["7"])
+        self.go("", "0\n0\n1\n0", end="sum", expect=["1"])
+        self.go("", "0\n0\n0\n0", end="sum", expect=["0"])
+        self.go("", "0\n0\n0\n0\n", end="sum", expect=["0"])
+
+        # even zero is added amongst numbers
+        self.go("", "1\n2\n0\n4", end="len(numbers)", expect=["4"])
+
+        # len function
+        self.go("", "0\n0\n0\n0", end="len", expect=["4"])
+        self.go("", "0\n0\n0\n0", end="len", expect=["4"])
+        self.go("", "0\n0\n1\n0", end="len", expect=["4"])
+        self.go("", "1\n2\n0\n4", end="len", expect=["4"])
+        self.go("", num, end="len", expect=["4"])
+        self.go("", "1\n", end="len", expect=["1"])
 
     def test_callable_with_no_output(self):
         """ When treating callable, we have to be able to put the line as its parameter.

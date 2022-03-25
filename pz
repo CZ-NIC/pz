@@ -214,8 +214,9 @@ def output(line, final_round=None):
                         pass
                 else:  # we are in the `--end` clause, original_line is empty, we use `lines` or `numbers` instead
                     if len(numbers) == len(lines):
-                        # ex: echo -e "1\n2\n3\n4" | pz --end sum
                         attempts.append((numbers, "numbers", "end"))
+                    else:
+                        logger.debug(f"Skip trying `numbers` as the callable parameter as some lines were not numbers.")
                     # ex: echo -e "1\n2\n3\n4" | pz  --end "' - '.join" ->  1 - 2 - 3 - 4
                     attempts.append((lines, "lines", "end"))
                 if not any(try_argument(line, *x) for x in attempts):
@@ -398,7 +399,7 @@ if __name__ == "__main__":
                     count += 1
                     # noinspection PyUnboundLocalVariable
                     lines.append(s)
-                    if n:
+                    if n is not None:
                         # noinspection PyUnboundLocalVariable
                         numbers.append(n)
 
