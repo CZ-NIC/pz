@@ -2,6 +2,7 @@
 #
 import argparse
 import logging
+import os
 import re
 import sys
 # noinspection PyUnresolvedReferences
@@ -61,10 +62,13 @@ parser.add_argument("-q", "--quiet", help='Suppress command exceptions', action=
 group1 = parser.add_argument_group("Command clauses")
 group1.add_argument("main", help='Any Python script executed on every line (multiple statements allowed)',
                     metavar="COMMAND", nargs="?")
-group1.add_argument("-S", "--setup", help='Any Python script, executed before processing.'
-                                          ' Useful for variable initializing.', metavar="COMMAND")
 group1.add_argument("-E", "--end", help='Any Python script, executed after processing.'
                                         ' Useful for final output.', metavar="COMMAND")
+group1.add_argument("-S", "--setup", help='Any Python script, executed before processing.'
+                                          ' Useful for variable initializing.', metavar="COMMAND")
+group1.add_argument("-I", "--insecure", help='If set, any Python script in the environment variable `PZ_SETUP`'
+                                             ' will be executed just before the `--setup` clause. Useful for imports.',
+                    action="store_true")
 group1.add_argument("-F", "--filter", help='Line is piped out unchanged, however only if evaluated to True.',
                     action='store_true')
 group1.add_argument("-f", "--format", help='Main and end clauses are considered f-strings.', action='store_true')
@@ -372,6 +376,10 @@ if __name__ == "__main__":
     # internal processing variables
     tried_to_correct_callable = False
     original_line: str = None
+
+    # run the code from the bash variable
+    if args.insecure and os.environ.get("PZ_SETUP"):
+        exec(os.environ["PZ_SETUP"])
 
     # run the setup clause
     if args.setup:

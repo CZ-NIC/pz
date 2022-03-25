@@ -224,6 +224,22 @@ class TestFlags(TestMaster):
         self.assertEqual(4, len(self.go("if custom: skip=True;", LOREM, setup='custom = 0;')))
         self.assertEqual(0, len(self.go("if custom: skip=True;", LOREM, setup='custom = 1;')))
 
+    def test_pz_setup(self):
+        """ env var `PZ_SETUP` available only with the `--insecure` flag """
+
+        def cmd(c, t, expected):
+            s = Popen(c, shell=True, stdout=PIPE, stderr=PIPE, stdin=PIPE) \
+                .communicate(input=t.encode("utf-8"))[0].decode()
+            self.assertEqual(expected, s)
+
+        digest = "67b176705b46206614219f47a05aee7ae6a3edbe850bbbe214c536b989aea4d2\n"
+
+        cmd("./pz 'sha3_256(b).hexdigest'", "1", "")
+        cmd("./pz --setup 'from hashlib import sha3_256' 'sha3_256(b).hexdigest'", "1", digest)
+        cmd("PZ_SETUP='from hashlib import sha3_256' ./pz 'sha3_256(b).hexdigest'", "1", "")
+        cmd("PZ_SETUP='from hashlib import sha3_256' ./pz --insecure 'sha3_256(b).hexdigest'", "1", digest)
+        cmd("PZ_SETUP='from hashlib import sha3_256' ./pz -I 'sha3_256(b).hexdigest'", "1", digest)
+
     def test_empty(self):
         """ `s = ` is prepended and empty lines are kept """
         self.go(self.col2 + ' == "Jamaica"', CSV, empty=True, expect=['True'] + ['False'] * 9)
@@ -417,9 +433,11 @@ class TestReturnValues(TestMaster):
         self.go("n", num, end="sum", expect=["1", "2", "3", "4", "10"])
         self.go("1", num, end="sum", expect=["1", "1", "1", "1", "10"])
         self.go("", "1\n2\n3\n0\ninvalid\n4", end="sum(numbers)", expect=["10"])
-        self.go("", "1\n2\n3\n0\ninvalid\n4", end="sum",
-                expect="Exception: <class 'TypeError'> sum() takes at least 1 positional argument (0 given)"
-                       " in the --end clause")
+        w = ("sum() takes at least 1 positional argument (0 given)"
+             if (sys.version_info.major, sys.version_info.minor) > (3, 7)
+             else "sum expected at least 1 arguments, got 0")
+        s = "Exception: <class 'TypeError'> " + w + " in the --end clause"
+        self.go("", "1\n2\n3\n0\ninvalid\n4", end="sum", expect=s)
 
         # Why are following statements same, why both expect the same list `["1 - 2 - 3 - 4"]`?
         # Consider POSIX text files should end with a new line.

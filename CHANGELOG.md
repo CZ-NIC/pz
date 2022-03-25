@@ -4,6 +4,7 @@
 - CHANGED: tuple output delimited by a tab instead of ', '
 - string repeat operator (`s *= 1` no more converted to `s = s *= 1`)
 - zero is added amongst `numbers`
+- env var `PZ_SETUP` for imports (conditioned by the `--insecure` flag at the moment) #7 
 
 ## 1.0.0 (2021-03-19)
 - CHANGED: `--end` clause renamed from `--finally`

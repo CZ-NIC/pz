@@ -574,16 +574,6 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
   
 ### Command clauses
 * `COMMAND`: The `main` clause, any Python script executed on every line (multiple statements allowed)
-* `-S COMMAND`, `--setup COMMAND`: Any Python script, executed before processing. Useful for variable initializing.
-    Ex: prepend line numbers by incrementing a variable `count`.
-    ```bash
-    $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
-    1: row
-    2: another row
-  
-    # the same using globally available variable `count` instead of using `--setup` and the `--format` flag
-    $ echo -e "row\nanother row" | pz -f '{count}: {s}'
-    ```
 * `-E COMMAND`, `--end COMMAND`: Any Python script, executed after processing. Useful for the final output.
     The variable `text` is available by default here.
     ```bash
@@ -601,6 +591,24 @@ As seen, `a` was incremented 3× times and `b` on twice because we had to proces
     6
     10
     10  # output of the `end` clause
+    ```
+* `-S COMMAND`, `--setup COMMAND`: Any Python script, executed before processing. Useful for variable initializing.
+    Ex: prepend line numbers by incrementing a variable `count`.
+    ```bash
+    $ echo -e "row\nanother row" | pz 'count+=1;s = f"{count}: {s}"'  --setup 'count=0'
+    1: row
+    2: another row
+  
+    # the same using globally available variable `count` instead of using `--setup` and the `--format` flag
+    $ echo -e "row\nanother row" | pz -f '{count}: {s}'
+    ```
+* `-I`, `--insecure`: If set, any Python script in the environment variable `PZ_SETUP` will be executed just before the `--setup` clause. Useful for imports. Since the user might launch an unintended code if an attacker tampers with the variable, we condition its evaluation by this flag for the moment.
+    ```bash
+    $ echo -e "1\n2\n3" | PZ_SETUP='from hashlib import sha3_256' pz -I 'sha3_256(b).hexdigest'  # equivalent to:
+    $ echo -e "1\n2\n3" | pz --setup 'from hashlib import sha3_256' 'sha3_256(b).hexdigest'
+    67b176705b46206614219f47a05aee7ae6a3edbe850bbbe214c536b989aea4d2
+    b1b1bd1ed240b1496c81ccf19ceccf2af6fd24fac10ae42023628abbe2687310
+    1bf0b26eb2090599dd68cbb42c86a674cb07ab7adc103ad3ccdf521bb79056b9
     ```
 * `-F`, `--filter`: Line is piped out unchanged, however only if evaluated to `True`.
     When piping in numbers to 5, we pass only such bigger than 3.
