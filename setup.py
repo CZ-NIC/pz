@@ -8,7 +8,7 @@ long_description = p.read_text() if p.exists() else None
 
 setup(
     name='pz',
-    version='1.1.0rc1',
+    version='1.1.0',
     author='Edvard Rejthar',
     author_email='edvard.rejthar@nic.cz',
     url='https://github.com/CZ-NIC/pz',

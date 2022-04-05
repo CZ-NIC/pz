@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.1.0 (unreleased)
+## 1.1.0 (2022-04-05)
 - CHANGED: tuple output delimited by a tab instead of ', '
 - string repeat operator (`s *= 1` no more converted to `s = s *= 1`)
 - zero is added amongst `numbers`
