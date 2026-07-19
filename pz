@@ -215,7 +215,7 @@ def output(line, final_round=None):
                             logger.debug("Let's try `s.encode('utf-8')` automatically too.")
                             attempts.append((original_line.encode("utf-8"), "s.encode('utf-8')"))
                     except ValueError:  # ex: `set.add` raises no signature found
-                        pass
+                        logger.debug("ValueError getting signature (no as e clause)")
                 else:  # we are in the `--end` clause, original_line is empty, we use `lines` or `numbers` instead
                     if len(numbers) == len(lines):
                         attempts.append((numbers, "numbers", "end"))
@@ -240,7 +240,7 @@ def get_number(v):
         num = float(v)
         num = int(v)  # "10.0" -> int conversion fails and num stays float
     except (ValueError, TypeError):
-        pass
+        logger.debug(f"Cannot convert {v} to number")
     return num
 
 
@@ -477,4 +477,4 @@ if __name__ == "__main__":
     try:
         sys.stdout.close()
     except BrokenPipeError:
-        pass
+        logger.debug("BrokenPipeError closing stdout")
